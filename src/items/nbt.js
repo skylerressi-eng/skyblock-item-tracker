@@ -20,8 +20,11 @@ export async function decodeInventory(base64) {
   const simple = nbt.simplify(parsed);
   const list = simple && simple.i;
   if (!Array.isArray(list)) return [];
-  // Empty slots simplify to {} — drop them.
-  return list.filter((it) => it && Object.keys(it).length > 0);
+  // Empty slots come back as {} (the SkyBlock convention) or occasionally as an
+  // air stub like { id: 0, Count: 0 } — drop both.
+  return list.filter(
+    (it) => it && Object.keys(it).length > 0 && (it.Count == null || it.Count > 0),
+  );
 }
 
 // Auction item_bytes contain a single item wrapped in the same { i: [ item ] }.
