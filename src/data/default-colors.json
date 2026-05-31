@@ -1,0 +1,12 @@
+{
+  "_note": "Preloaded DEFAULT (factory) colours for colourable leather-based armour, keyed by Hypixel item id. A piece showing its default colour is NOT exotic. These seed the detector so it works immediately, before it has learned defaults from scanning. The crawler still learns/refines defaults empirically (piece_colors table) — learned values win once confident. Hex lowercase, no '#'. Verified values are included; sets without a confirmed value are intentionally omitted (the learner fills those in). _vanillaLeather is the undyed fallback for any leather piece with no entry.",
+  "_vanillaLeather": "a06540",
+  "ARMOR_OF_MAGMA_HELMET": "ff9300",
+  "ARMOR_OF_MAGMA_CHESTPLATE": "ff9300",
+  "ARMOR_OF_MAGMA_LEGGINGS": "ff9300",
+  "ARMOR_OF_MAGMA_BOOTS": "ff9300",
+  "MAGMA_LORD_HELMET": "ff9300",
+  "MAGMA_LORD_CHESTPLATE": "ff9300",
+  "MAGMA_LORD_LEGGINGS": "ff9300",
+  "MAGMA_LORD_BOOTS": "ff9300"
+}

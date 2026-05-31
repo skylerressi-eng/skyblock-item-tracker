@@ -7,6 +7,7 @@ import { findingsRouter } from './routes/findings.js';
 import { pricesRouter } from './routes/prices.js';
 import { statsRouter } from './routes/stats.js';
 import { crawlRouter } from './routes/crawl.js';
+import { referenceRouter } from './routes/reference.js';
 import { startAhWorker } from './scanner/ahWorker.js';
 import { startCrawler } from './scanner/crawler.js';
 
@@ -21,6 +22,7 @@ app.use('/api/findings', findingsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/crawl', crawlRouter);
+app.use('/api/reference', referenceRouter);
 
 app.use(express.static(path.join(ROOT, 'public')));
 

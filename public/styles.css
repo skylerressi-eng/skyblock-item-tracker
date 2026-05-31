@@ -181,6 +181,33 @@ button:disabled { opacity: 0.5; cursor: default; }
 .ok { color: var(--accent-2); }
 .warn-text { color: var(--gold); }
 
+/* Reference panel */
+.reference { display: flex; flex-direction: column; gap: 20px; }
+.ref-group h3 { font-size: 14px; margin: 0 0 4px; }
+.ref-group .ref-desc { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.ref-yes h3 { color: var(--accent-2); }
+.ref-no h3 { color: var(--danger); }
+.swatch-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 10px 5px 6px; font-size: 12px;
+}
+.swatch-chip .sw {
+  width: 22px; height: 22px; border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.18); flex: none;
+}
+.swatch-chip .mono { color: var(--muted); }
+.ref-fam { margin-bottom: 12px; }
+.ref-fam-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.ref-fam-info { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.ref-items { display: flex; flex-wrap: wrap; gap: 6px; }
+.ref-pill {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.ref-pill .mono { color: var(--muted); font-size: 11px; }
+
 table.kv { border-collapse: collapse; width: 100%; font-size: 14px; }
 table.kv td { padding: 6px 10px; border-bottom: 1px solid var(--line); }
 table.kv td:first-child { color: var(--muted); width: 40%; }

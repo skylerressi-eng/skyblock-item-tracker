@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { hexFromInt, normHex, dist } from '../src/items/colors.js';
-import { classifyFamily, classifyExotic } from '../src/items/exotics.js';
+import { classifyFamily, classifyExotic, matchKnownDye } from '../src/items/exotics.js';
 import { classifyRarity, classifyCurated } from '../src/items/rarity.js';
 import { classifyItem } from '../src/items/classify.js';
 import { parseRarityFromLore, normalizeNbtItem } from '../src/items/extract.js';
@@ -40,27 +40,57 @@ test('exotics: pure black armour with no dye is a high-confidence exotic', () =>
   assert.equal(f.confidence, 'high');
 });
 
-test('exotics: off-default colour is flagged high when default is known', () => {
-  const item = { itemId: 'CRYSTAL_HELMET', hex: '123456', extra: {} };
-  const f = classifyExotic(item, ctx({ CRYSTAL_HELMET: '22d3ee' }));
+test('exotics: off-default colour is flagged high when LEARNED default is known', () => {
+  const item = { itemId: 'SOME_HELMET', hex: '123456', extra: {} };
+  const f = classifyExotic(item, ctx({ SOME_HELMET: '22d3ee' }));
   assert.equal(f.confidence, 'high');
   assert.match(f.reason, /default/i);
 });
 
 test('exotics: matching the learned default is NOT exotic', () => {
-  const item = { itemId: 'CRYSTAL_HELMET', hex: '22d3ee', extra: {} };
-  assert.equal(classifyExotic(item, ctx({ CRYSTAL_HELMET: '22d3ee' })), null);
+  const item = { itemId: 'SOME_HELMET', hex: '22d3ee', extra: {} };
+  assert.equal(classifyExotic(item, ctx({ SOME_HELMET: '22d3ee' })), null);
 });
 
-test('exotics: a legitimately dyed item is NOT exotic', () => {
-  const item = { itemId: 'CRYSTAL_HELMET', hex: '123456', extra: { dye_item: 'DYE_PURE_BLACK' } };
+test('exotics: a modern dye_item piece is NOT exotic', () => {
+  const item = { itemId: 'SOME_HELMET', hex: '123456', extra: { dye_item: 'DYE_PURE_BLACK' } };
   assert.equal(classifyExotic(item, ctx()), null);
 });
 
-test('exotics: undyed vanilla leather is NOT exotic; unknown default is low-confidence', () => {
+test('exotics: undyed vanilla leather is NOT exotic; unknown default is medium-confidence', () => {
   assert.equal(classifyExotic({ itemId: 'X', hex: 'a06540', extra: {} }, ctx()), null);
   const f = classifyExotic({ itemId: 'X', hex: '654321', extra: {} }, ctx());
-  assert.equal(f.confidence, 'low');
+  assert.equal(f.confidence, 'medium');
+});
+
+test('exotics: Crystal and Fairy dye colours are NOT exotic', () => {
+  // Crystal chart entry
+  assert.equal(matchKnownDye('1f0030').name, 'CRYSTAL');
+  assert.equal(classifyExotic({ itemId: 'X', hex: '1f0030', extra: {} }, ctx()), null);
+  // Fairy chart entry
+  assert.equal(matchKnownDye('ff00ff') ? 'known' : null, 'known');
+  // a Fairy-only purple that is NOT a pure colour
+  assert.equal(classifyExotic({ itemId: 'X', hex: 'b266ff', extra: {} }, ctx()), null);
+});
+
+test('exotics: a true off-chart colour IS exotic even if it is a colourful armour', () => {
+  // #654321 is not vanilla, not Crystal/Fairy, not a piece default -> exotic
+  const f = classifyExotic({ itemId: 'GENERIC_LEATHER_HELMET', hex: '654321', extra: {} }, ctx());
+  assert.equal(f.category, 'exotic');
+});
+
+test('exotics: preloaded Magma default colour is NOT exotic', () => {
+  // ff9300 is Magma's factory colour, preloaded in default-colors.json
+  assert.equal(classifyExotic({ itemId: 'ARMOR_OF_MAGMA_CHESTPLATE', hex: 'ff9300', extra: {} }, ctx()), null);
+  // but an off-colour Magma piece is exotic
+  const f = classifyExotic({ itemId: 'ARMOR_OF_MAGMA_CHESTPLATE', hex: '101010', extra: {} }, ctx());
+  assert.equal(f.category, 'exotic');
+});
+
+test('exotics: pure black on any leather item is a PURE exotic (works on ALL items)', () => {
+  const f = classifyExotic({ itemId: 'WHATEVER_BOOTS', hex: '000000', extra: {} }, ctx());
+  assert.equal(f.subcategory, 'PURE');
+  assert.equal(f.confidence, 'high');
 });
 
 test('exotics: items without a colour are skipped', () => {

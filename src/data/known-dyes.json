@@ -1,0 +1,15 @@
+{
+  "_note": "KNOWN, OBTAINABLE dye charts — these are explicitly NOT exotic. Crystal & Fairy armor cycle through fixed colour charts (now patched but well-documented). If a piece's hex matches one of these, it was Crystal/Fairy dyed and is NOT an exotic. Hex codes are lowercase, no '#'. Sources: community 'Crystal/Fairy Dyed Sets - Hex Codes' thread + LeaPhant's SkyBlock gist (the same data SkyCrypt uses).",
+  "_matchTolerance": 4,
+  "CRYSTAL": [
+    "1f0030", "46085e", "54146e", "5d1c78", "63237d", "6a2c82",
+    "7e4196", "8e51a6", "9c64b3", "a875bd", "b88bc9", "c6a3d4",
+    "d9c1e3", "e5d1ed", "efe1f5", "fcf3ff"
+  ],
+  "FAIRY": [
+    "660066", "660033", "99004c", "cc0066", "ff007f", "ff3399",
+    "ff66b2", "ff99cc", "ffcce5", "990099", "cc00cc", "ff00ff",
+    "ff33ff", "ff66ff", "ff99ff", "ffccff", "e5ccff", "cc99ff",
+    "b266ff", "9933ff", "7f00ff", "6600cc", "4c0099", "330066"
+  ]
+}

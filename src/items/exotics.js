@@ -1,28 +1,52 @@
 import { normHex, dist } from './colors.js';
-import { families } from './data.js';
+import { families, knownDyes, preloadedDefaultHex } from './data.js';
 
-// Vanilla undyed leather. A piece that still has this colour and no dye is just
-// an undyed/never-coloured leather item, not an exotic.
-const VANILLA_LEATHER = 'a06540';
+// --- What counts as exotic? -------------------------------------------------
+// An exotic is a colourable armour piece whose colour CANNOT be obtained today:
+// OG-dyed (pre-Nov-2019 vanilla dyeing), crafted (e.g. True Black Necron/Storm),
+// or glitched. The following are explicitly NOT exotic:
+//   * undyed / vanilla leather (#a06540)
+//   * pieces dyed with the modern dye system (ExtraAttributes.dye_item)
+//   * Crystal- and Fairy-dyed colours (known, documented charts)
+//   * a piece showing its own factory default colour
+// So the rule is: off-default colour AND not a known dye  ->  exotic.
 
-// Max RGB distance for a fuzzy family match when there is no exact hit.
-const FAMILY_FUZZY_THRESHOLD = 10;
-
+const FAMILY_FUZZY_THRESHOLD = 10; // RGB distance for a fuzzy exotic-family hit
 const FAMILY_NAMES = Object.keys(families).filter((k) => !k.startsWith('_'));
+const KNOWN_DYE_NAMES = Object.keys(knownDyes).filter((k) => !k.startsWith('_'));
+const KNOWN_DYE_TOLERANCE = Number(knownDyes._matchTolerance ?? 4);
 
-// Decide which exotic family a hex belongs to.
-//  - exact match in a family list  -> { name, exact: true }
-//  - near a populated family list   -> { name, exact: false }
-//  - otherwise                      -> { name: 'EXOTIC', exact: false }
+// Is this hex a Crystal/Fairy (or other known, obtainable) dye colour?
+// Returns the chart name (e.g. 'CRYSTAL', 'FAIRY') or null. Uses a small
+// tolerance because client/render rounding can nudge a code by a point or two.
+export function matchKnownDye(hex) {
+  const h = normHex(hex);
+  if (!h) return null;
+  for (const name of KNOWN_DYE_NAMES) {
+    for (const c of knownDyes[name] || []) {
+      if (h === normHex(c)) return { name, exact: true };
+    }
+  }
+  let best = null;
+  for (const name of KNOWN_DYE_NAMES) {
+    for (const c of knownDyes[name] || []) {
+      const d = dist(h, c);
+      if (best == null || d < best.d) best = { name, d };
+    }
+  }
+  if (best && best.d <= KNOWN_DYE_TOLERANCE) return { name: best.name, exact: false };
+  return null;
+}
+
+// Which exotic origin family does this hex look like? Falls back to generic
+// 'EXOTIC' when it matches no specific family seed.
 export function classifyFamily(hex) {
   const h = normHex(hex);
   if (!h) return { name: 'EXOTIC', exact: false };
 
   for (const fam of FAMILY_NAMES) {
-    const listed = (families[fam] || []).map(normHex);
-    if (listed.includes(h)) return { name: fam, exact: true };
+    if ((families[fam] || []).map(normHex).includes(h)) return { name: fam, exact: true };
   }
-
   let best = null;
   for (const fam of FAMILY_NAMES) {
     for (const c of families[fam] || []) {
@@ -34,44 +58,45 @@ export function classifyFamily(hex) {
   return { name: 'EXOTIC', exact: false };
 }
 
-// Classify a single item as exotic (or not).
+// Classify a single item as exotic (or not). Works for ANY colourable item, not
+// just items on a rare list.
 //   item: normalized item (see items/extract.js)
-//   ctx.getDefaultHex(itemId) -> learned default hex or null
+//   ctx.getDefaultHex(itemId) -> learned default hex or null (empirical)
 // Returns a finding fragment or null.
 export function classifyExotic(item, { getDefaultHex } = {}) {
-  if (!item || !item.hex) return null; // only leather armour carries a colour
+  if (!item || !item.hex) return null; // only colourable (leather) armour has a colour
   const hex = normHex(item.hex);
   if (!hex) return null;
 
-  // Legitimately dyed with the SkyBlock dye system -> normal, not exotic.
+  // 1. Modern dye-system pieces are never exotic.
   if (item.extra && item.extra.dye_item) return null;
 
-  const def = getDefaultHex ? getDefaultHex(item.itemId) : null;
+  // 2. Resolve this piece's default: empirically-learned wins, else preloaded.
+  const learned = getDefaultHex ? getDefaultHex(item.itemId) : null;
+  const def = learned || preloadedDefaultHex(item.itemId);
 
-  // Matches its known/learned default, or is plain undyed leather -> not exotic.
-  if (def && hex === def) return null;
-  if (!def && hex === VANILLA_LEATHER) return null;
+  // 3. Showing its own default colour -> not exotic.
+  if (def && hex === normHex(def)) return null;
 
+  // 4. Crystal/Fairy (or other known obtainable) dye -> NOT exotic.
+  const known = matchKnownDye(hex);
+  if (known) return null;
+
+  // 5. Off-default and not a known dye -> EXOTIC. Sub-classify the origin.
   const fam = classifyFamily(hex);
-
   let confidence;
   let reason;
   if (fam.exact) {
     confidence = 'high';
-    reason = `Matches a known ${fam.name} exotic colour`;
-  } else if (def) {
+    reason = `Matches a known ${fam.name.replace('_', ' ')} exotic colour`;
+  } else if (learned) {
     confidence = 'high';
-    reason = `Off-default colour (this piece's default is #${def})`;
+    reason = `Off-default colour (learned default #${learned}), not a Crystal/Fairy dye`;
   } else {
-    confidence = 'low';
-    reason = 'Default colour not yet learned for this piece — scan more copies to confirm';
+    // Off a *preloaded* default (or vanilla fallback) but not yet learned.
+    confidence = 'medium';
+    reason = `Off-default colour, not a Crystal/Fairy dye — likely OG/glitched exotic`;
   }
 
-  return {
-    category: 'exotic',
-    subcategory: fam.name,
-    hex,
-    confidence,
-    reason,
-  };
+  return { category: 'exotic', subcategory: fam.name, hex, confidence, reason };
 }

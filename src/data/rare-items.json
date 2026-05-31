@@ -1,35 +1,21 @@
 {
-  "_note": "Curated item IDs to always flag, independent of rarity tier. Edit freely. 'category' is the top-level bucket shown in the UI: use 'game_breaker' for build-defining / meta items and 'curated_rare' for ultra-rare collectibles. Any entry with id 'EXAMPLE_ITEM_ID' is ignored.",
+  "_note": "Curated item IDs to always flag, independent of rarity tier or colour. 'category' is the UI bucket: 'game_breaker' for build-defining/meta items, 'curated_rare' for ultra-rare collectibles. Entries with id 'EXAMPLE_ITEM_ID' are ignored. This is the 'these specific items are rare' preload — separate from exotic-COLOUR detection, which works on any colourable piece.",
   "items": [
-    {
-      "id": "CAKE_SOUL",
-      "label": "Cake Soul",
-      "category": "curated_rare",
-      "subcategory": "COLLECTOR",
-      "note": "Extremely rare collectible"
-    },
-    {
-      "id": "PARTY_HAT_CRAB",
-      "label": "Party Hat (Crab)",
-      "category": "curated_rare",
-      "subcategory": "COLLECTOR",
-      "note": "Rare event cosmetic"
-    },
-    {
-      "id": "PARTY_HAT_CRAB_ANIMATED",
-      "label": "Party Hat (Crab, Animated)",
-      "category": "curated_rare",
-      "subcategory": "COLLECTOR",
-      "note": "Rare animated event cosmetic"
-    }
+    { "id": "CAKE_SOUL", "label": "Cake Soul", "category": "curated_rare", "subcategory": "COLLECTOR", "note": "Extremely rare collectible from eating an Old SkyBlock Cake" },
+    { "id": "PARTY_HAT_CRAB", "label": "Party Hat (Crab)", "category": "curated_rare", "subcategory": "COSMETIC", "note": "Rare New Year event cosmetic" },
+    { "id": "PARTY_HAT_CRAB_ANIMATED", "label": "Party Hat (Crab, Animated)", "category": "curated_rare", "subcategory": "COSMETIC", "note": "Rare animated New Year event cosmetic" },
+    { "id": "PARTY_HAT_SLOTH", "label": "Party Hat (Sloth)", "category": "curated_rare", "subcategory": "COSMETIC", "note": "Rare event cosmetic" },
+    { "id": "BALLOON_HAT_2024", "label": "Balloon Hat 2024", "category": "curated_rare", "subcategory": "COSMETIC", "note": "Anniversary event cosmetic" },
+    { "id": "RIFT_PRISM", "label": "Rift Prism", "category": "curated_rare", "subcategory": "COLLECTOR", "note": "Unique Rift unlock item" },
+    { "id": "DCTR_SPACE_HELM", "label": "DCTR's Space Helmet", "category": "curated_rare", "subcategory": "COLLECTOR", "note": "Rare collector helmet" }
   ],
   "game_breakers": [
-    {
-      "id": "EXAMPLE_ITEM_ID",
-      "label": "Example - replace me",
-      "category": "game_breaker",
-      "subcategory": "GAME_BREAKER",
-      "note": "Add the item IDs you consider game-breaking / meta-defining here"
-    }
+    { "id": "HEGEMONY_ARTIFACT", "label": "Hegemony Artifact", "category": "game_breaker", "subcategory": "ACCESSORY", "note": "Unique top-tier accessory" },
+    { "id": "DARK_CLAYMORE", "label": "Dark Claymore", "category": "game_breaker", "subcategory": "WEAPON", "note": "Extremely expensive endgame sword" },
+    { "id": "HYPERION", "label": "Hyperion", "category": "game_breaker", "subcategory": "WEAPON", "note": "Meta-defining Necron's Blade (Implosion)" },
+    { "id": "VALKYRIE", "label": "Valkyrie", "category": "game_breaker", "subcategory": "WEAPON", "note": "Top Necron's Blade variant" },
+    { "id": "NECRONS_BLADE", "label": "Necron's Blade", "category": "game_breaker", "subcategory": "WEAPON", "note": "Base for the Hyperion/Valkyrie/Astraea/Scylla" },
+    { "id": "TERMINATOR", "label": "Terminator", "category": "game_breaker", "subcategory": "WEAPON", "note": "Meta-defining bow" },
+    { "id": "DAEDALUS_AXE", "label": "Daedalus Axe", "category": "game_breaker", "subcategory": "WEAPON", "note": "Top crimson-isle weapon" }
   ]
 }

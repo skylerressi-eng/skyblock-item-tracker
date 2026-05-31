@@ -180,6 +180,81 @@ $('#conf-filter').addEventListener('change', (e) => { state.confidence = e.targe
 $('#source-filter').addEventListener('change', (e) => { state.source = e.target.value; resetAndLoadFindings(); });
 $('#load-more').addEventListener('click', () => { state.offset += PAGE; loadFindings(true); });
 
+// ---------- reference panel ----------
+let refLoaded = false;
+function swatchChips(map) {
+  return Object.entries(map)
+    .map(([k, hex]) => `<span class="swatch-chip"><span class="sw" style="background:#${esc(hex)}"></span>${esc(k)} <span class="mono">#${esc(hex)}</span></span>`)
+    .join('');
+}
+function hexChips(list) {
+  return (list || [])
+    .map((hex) => `<span class="swatch-chip"><span class="sw" style="background:#${esc(hex)}"></span><span class="mono">#${esc(hex)}</span></span>`)
+    .join('');
+}
+async function loadReference() {
+  const box = $('#reference');
+  box.innerHTML = `<p class="hint">Loading…</p>`;
+  try {
+    const r = await (await fetch('/api/reference')).json();
+    const ex = r.exotic || {}; const no = r.notExotic || {}; const ri = r.rareItems || {};
+    const famHtml = Object.entries(ex.families || {}).map(([name, list]) => `
+      <div class="ref-fam">
+        <div class="ref-fam-name">${esc(name.replace('_', ' '))} ${list.length ? `<span class="mono">(${list.length})</span>` : '<span class="mono">(open — any off-chart colour)</span>'}</div>
+        ${ex.info && ex.info[name] ? `<div class="ref-fam-info">${esc(ex.info[name])}</div>` : ''}
+        ${list.length ? `<div class="swatch-grid">${hexChips(list)}</div>` : ''}
+      </div>`).join('');
+
+    const knownHtml = Object.entries(no.knownDyes || {}).map(([name, list]) => `
+      <div class="ref-fam">
+        <div class="ref-fam-name">${esc(name)} dye <span class="mono">(${list.length})</span></div>
+        <div class="swatch-grid">${hexChips(list)}</div>
+      </div>`).join('');
+
+    const rareHtml = (items, title) => `
+      <div class="ref-fam">
+        <div class="ref-fam-name">${esc(title)} <span class="mono">(${items.length})</span></div>
+        <div class="ref-items">${items.map((i) => `<span class="ref-pill">${esc(i.label || i.id)} <span class="mono">${esc(i.id)}</span></span>`).join('')}</div>
+      </div>`;
+
+    box.innerHTML = `
+      <div class="ref-group ref-yes">
+        <h3>✓ EXOTIC colours (flagged)</h3>
+        <p class="ref-desc">Off-default colours that aren't a known dye. Sub-tagged by likely origin:</p>
+        ${famHtml}
+      </div>
+      <div class="ref-group ref-no">
+        <h3>✕ NOT exotic</h3>
+        <p class="ref-desc">${esc(no.note || '')}</p>
+        <div class="ref-fam">
+          <div class="ref-fam-name">Undyed / vanilla leather</div>
+          <div class="swatch-grid">${hexChips([no.vanillaLeather])}</div>
+        </div>
+        ${knownHtml}
+        <div class="ref-fam">
+          <div class="ref-fam-name">Preloaded piece defaults <span class="mono">(${Object.keys(no.defaultColors || {}).length})</span></div>
+          <div class="ref-fam-info">A piece showing its own factory colour is not exotic. The crawler also learns defaults as it scans.</div>
+          <div class="swatch-grid">${swatchChips(no.defaultColors || {})}</div>
+        </div>
+      </div>
+      <div class="ref-group">
+        <h3>★ Rare ITEMS (flagged regardless of colour)</h3>
+        <p class="ref-desc">Special-rarity tiers: <b>${(ri.specialRarityTiers || []).join(', ')}</b></p>
+        ${rareHtml(ri.gameBreakers || [], 'Game breakers')}
+        ${rareHtml(ri.curated || [], 'Collectors / cosmetics')}
+      </div>`;
+  } catch (err) {
+    box.innerHTML = `<p class="error">✕ ${esc(err.message)}</p>`;
+  }
+}
+$('#ref-toggle').addEventListener('click', () => {
+  const box = $('#reference');
+  const show = box.hidden;
+  box.hidden = !show;
+  $('#ref-toggle').textContent = show ? 'Hide' : 'Show';
+  if (show && !refLoaded) { refLoaded = true; loadReference(); }
+});
+
 // ---------- prices ----------
 $('#price-form').addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -44,31 +44,45 @@ Built around your priorities:
 
 ## How exotic detection works
 
-Leather armour stores its colour as an integer in NBT (`tag.display.color`).
-"Exotics" are pieces whose hex colour can't be obtained normally (legacy dyes,
-glitches, fairy/crystal colours, pure colours, etc.). The engine:
+**📖 Full preloaded reference (which colours/items are exotic vs not):
+[`docs/EXOTICS.md`](docs/EXOTICS.md)** — also served at `GET /api/reference` and
+shown in the website's **Reference** panel.
 
-1. **Skips dyed items.** Anything with `ExtraAttributes.dye_item` was coloured
-   with the modern dye system → not exotic.
-2. **Learns each piece's default colour.** The modal colour seen across all
-   scanned copies of an item is almost certainly its legit default (exotics are
-   rare outliers). Stored in the `piece_colors` table and improves as you scan.
-   No giant hardcoded colour list required.
-3. **Flags off-default colours** as exotic, then **sub-classifies** them:
-   - exact match in a known family (`PURE`, `CRYSTAL`, `FAIRY`, `OG_FAIRY`,
-     `SPOOKY`, `BLEACHED`, `GLITCHED`) → that family, high confidence
-   - off-default with a known default → high confidence, generic `EXOTIC`
-   - off-default but default not yet learned → low confidence (needs more scans)
+Leather armour stores its colour as an integer in NBT (`tag.display.color`). An
+**exotic** is a colourable piece whose colour **can't be obtained today** (OG
+pre-Nov-2019 dyeing, crafted, or glitched). The community rule — which this
+engine implements — is:
 
-The family lists live in [`src/data/exotic-families.json`](src/data/exotic-families.json)
-— `PURE` is complete; the others are small seeds you can expand from community
-datasets for sharper sub-classification. The engine is correct with empty
-families; it just labels more things generic `EXOTIC`.
+```
+colourable piece
+  ├─ has a modern dye_item?            → NOT exotic
+  ├─ colour == its default/factory?    → NOT exotic
+  ├─ colour on the Crystal/Fairy chart → NOT exotic   ← Crystal & Fairy are NOT exotic
+  └─ otherwise (off-chart colour)      → EXOTIC ✓
+```
+
+So detection works on **any colourable item**, not just a hardcoded list. The
+engine:
+
+1. **Skips modern-dye pieces** (`ExtraAttributes.dye_item`).
+2. **Knows factory defaults** — preloaded in
+   [`default-colors.json`](src/data/default-colors.json) (e.g. Magma `#ff9300`)
+   *and* learned empirically (modal colour per item in the `piece_colors` table;
+   learned wins once confident).
+3. **Excludes known dyes** — the full Crystal (16) + Fairy (24) hex charts in
+   [`known-dyes.json`](src/data/known-dyes.json). These are explicitly **not**
+   exotic.
+4. **Flags everything else off-default** as exotic and sub-classifies the likely
+   origin (`PURE`, `TRUE_BLACK`, `CRAFTED`, `OG_DYED`, `GLITCHED`) — see
+   [`exotic-families.json`](src/data/exotic-families.json). Confidence is **high**
+   for a known family / learned-default mismatch, **medium** when only a
+   preloaded/vanilla default is known.
 
 ### Other categories
 - **`special_rarity`** — items whose tier is in `RARE_TIERS`
   (default `SPECIAL, VERY_SPECIAL`; tune via env).
-- **`curated_rare` / `game_breaker`** — explicit item IDs you list in
+- **`curated_rare` / `game_breaker`** — preloaded rare item IDs (Hyperion,
+  Terminator, Cake Soul, Party Hats, …) in
   [`src/data/rare-items.json`](src/data/rare-items.json). Edit freely.
 
 ---
@@ -140,6 +154,7 @@ friends-of-friends.
 | `POST` | `/api/crawl/enqueue` | Body `{username}` or `{uuid}` — add an account to the crawl |
 | `POST` | `/api/crawl/seed` | Reload `seeds.json` into the queue |
 | `GET` | `/api/prices/:item?span=day` | Current price + history (Coflnet, cached) |
+| `GET` | `/api/reference` | Preloaded knowledge: exotic families, Crystal/Fairy charts, defaults, rare items |
 | `GET` | `/api/stats` | DB counts, AH worker + crawler status, capability flags |
 | `GET` | `/api/health` | Liveness |
 
@@ -160,7 +175,7 @@ src/
     rarity.js          tier + curated classification
     classify.js        run all classifiers
     data.js            load JSON datasets
-  data/                exotic-families / dye-colors / rare-items / seeds (editable)
+  data/                exotic-families / known-dyes / default-colors / rare-items / seeds (editable)
   scanner/
     scanProfile.js     scan one player (key path + SkyCrypt fallback, returns friends)
     crawler.js         queue-draining account crawler  ◀ discovery engine

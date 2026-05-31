@@ -1,19 +1,20 @@
 {
-  "_note": "Seed lists of known exotic hex colours per family (lowercase, no '#'). An off-default armour colour that exactly matches an entry here is tagged with that family; otherwise it is tagged generic 'EXOTIC'. The PURE list is exhaustive; the other families are intentionally small seeds — expand them from community datasets (e.g. the SkyBlock exotics community) for sharper sub-classification. The engine works correctly with empty families; it just labels more things 'EXOTIC'.",
+  "_note": "EXOTIC colour seed lists, grouped by origin/type. An off-default armour colour that matches one of these is tagged with that family (high confidence). Anything off-default that matches NO known dye (see known-dyes.json) and NO family here is still flagged exotic, just as generic 'EXOTIC'. Hex codes are lowercase, no '#'. PURE is exhaustive. CRAFTED/TRUE_BLACK lists real documented values; OG_DYED/GLITCHED are intentionally open (those are defined by being off-default & not a known dye, not by a fixed chart). Expand freely.",
+  "_familyInfo": {
+    "PURE": "Perfect RGB extremes (e.g. #000000, #ff0000). Impossible via normal dyeing — always exotic.",
+    "TRUE_BLACK": "Crafted Necron/Storm pieces that stayed near-black on Floor 7 release day. Extremely valuable.",
+    "CRAFTED": "Colour retained from a crafting ingredient (e.g. early yellow Shark/Sharp pieces).",
+    "OG_DYED": "Dyed before Nov 2019 with the vanilla dye method — colours unreachable by Crystal/Fairy. The classic exotics (Magma, Lapis, Dragon sets, Tarantula, etc.).",
+    "GLITCHED": "Colour carried over through an armour-upgrade glitch."
+  },
   "PURE": [
-    "000000",
-    "ffffff",
-    "ff0000",
-    "00ff00",
-    "0000ff",
-    "ffff00",
-    "00ffff",
-    "ff00ff"
+    "000000", "ffffff", "ff0000", "00ff00", "0000ff",
+    "ffff00", "00ffff", "ff00ff"
   ],
-  "CRYSTAL": [],
-  "FAIRY": [],
-  "OG_FAIRY": [],
-  "SPOOKY": [],
-  "BLEACHED": [],
+  "TRUE_BLACK": [
+    "0a0a0a", "0b0b0b", "0c0c0c", "111111", "131313"
+  ],
+  "CRAFTED": [],
+  "OG_DYED": [],
   "GLITCHED": []
 }
