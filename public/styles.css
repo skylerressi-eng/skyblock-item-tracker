@@ -14,6 +14,11 @@
 
 * { box-sizing: border-box; }
 
+/* The [hidden] attribute must always win, even over rules that set display
+   (e.g. .modal-overlay/.reference use display:flex). Without this, a "hidden"
+   fixed-position overlay still renders and swallows all clicks/keystrokes. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
