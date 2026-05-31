@@ -220,3 +220,49 @@ footer {
   font-size: 13px;
 }
 .spark { display: block; margin-top: 12px; width: 100%; height: 60px; }
+
+/* Clickable cards */
+.card.clickable { cursor: pointer; transition: border-color .15s, transform .15s; }
+.card.clickable:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* Item detail modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(6, 8, 12, 0.72);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 16px; overflow-y: auto;
+}
+.modal {
+  position: relative;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); width: 100%; max-width: 720px;
+  padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.modal-close {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 15px;
+}
+.modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+.detail-head { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 8px; }
+.detail-head h3 { margin: 0 0 4px; font-size: 18px; }
+.swatch.big { width: 64px; height: 64px; border-radius: 10px; }
+
+.detail-section { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.detail-section h4 { margin: 0 0 10px; font-size: 14px; }
+.detail-section .muted { color: var(--muted); font-weight: 400; }
+.detail-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.detail-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 560px) { .detail-cols { grid-template-columns: 1fr; } }
+
+.pop-summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.pop-stat {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 14px; font-size: 12px; color: var(--muted);
+}
+.pop-stat b { display: block; font-size: 18px; color: var(--accent-2); }
+
+td.muted, .kv td.muted { color: var(--muted); }
+.badge.conf-high { border-color: #1c5a4a; color: var(--accent-2); }
+.badge.conf-medium { border-color: #6b5a1a; color: var(--gold); }

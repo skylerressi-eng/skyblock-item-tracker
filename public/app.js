@@ -123,7 +123,7 @@ function cardFor(f, flash = false) {
   const price = f.price ? `${fmt(f.price)} coins` : '';
   const confBadge = f.confidence === 'low' ? `<span class="badge conf-low">low conf</span>` : '';
   return `
-    <div class="card${flash ? ' flash' : ''}">
+    <div class="card clickable${flash ? ' flash' : ''}" data-id="${esc(f.id)}" title="Click for details, price &amp; colour population">
       <div class="card-head">
         ${swatch}
         <div>
@@ -254,6 +254,134 @@ $('#ref-toggle').addEventListener('click', () => {
   $('#ref-toggle').textContent = show ? 'Hide' : 'Show';
   if (show && !refLoaded) { refLoaded = true; loadReference(); }
 });
+
+// ---------- item detail modal ----------
+const overlay = $('#modal-overlay');
+function closeModal() { overlay.hidden = true; $('#modal-body').innerHTML = ''; }
+$('#modal-close').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) closeModal(); });
+
+// Pull buy/sell out of Coflnet's various current-price shapes.
+function extractPrices(cur = {}) {
+  const buy = cur.buy ?? cur.buyPrice ?? cur.lowestBin ?? cur.lowest_bin ?? cur.min ?? cur.minPrice;
+  const sell = cur.sell ?? cur.sellPrice ?? cur.median ?? cur.max ?? cur.maxPrice;
+  return { buy, sell };
+}
+
+// Delegated click: any card opens its detail view (works for live-added cards).
+document.addEventListener('click', (e) => {
+  const card = e.target.closest('.card.clickable');
+  if (!card || !card.dataset.id) return;
+  openDetail(card.dataset.id);
+});
+
+async function openDetail(id) {
+  overlay.hidden = false;
+  $('#modal-body').innerHTML = `<p class="hint">Loading…</p>`;
+  try {
+    const d = await (await fetch(`/api/findings/${encodeURIComponent(id)}?span=week`)).json();
+    if (!d.ok) throw new Error(d.error || 'not found');
+    $('#modal-body').innerHTML = renderDetail(d);
+    const bp = d.basePrice || {};
+    if (bp.history) drawSpark($('#detail-spark'), bp.history);
+  } catch (err) {
+    $('#modal-body').innerHTML = `<p class="error">✕ ${esc(err.message)}</p>`;
+  }
+}
+
+function renderDetail(d) {
+  const f = d.finding;
+  const isColored = Boolean(f.hex);
+  const swatch = isColored
+    ? `<div class="swatch big" style="background:#${esc(f.hex)}" title="#${esc(f.hex)}"></div>`
+    : `<div class="swatch big" style="background:linear-gradient(135deg,#2a2f3d,#3a4050)"></div>`;
+
+  // Owner line.
+  const owner = f.username
+    ? `<a href="https://sky.shiiyu.moe/stats/${encodeURIComponent(f.username)}" target="_blank" rel="noopener">${esc(f.username)}</a>`
+    : (f.account_uuid ? `<span class="mono">${esc(f.account_uuid)}</span>` : '—');
+
+  // Base (non-dyed) price block.
+  const bp = d.basePrice || {};
+  const { buy, sell } = extractPrices(bp.current || {});
+  let priceRows = '';
+  if (buy != null) priceRows += `<tr><td>Buy / lowest BIN</td><td>${fmt(Math.round(buy))} coins</td></tr>`;
+  if (sell != null) priceRows += `<tr><td>Sell / median</td><td>${fmt(Math.round(sell))} coins</td></tr>`;
+  if (!priceRows) {
+    priceRows = `<tr><td colspan="2" class="muted">${esc(bp.currentError || bp.historyError || 'No price data (item may be untracked or APIs unreachable)')}</td></tr>`;
+  }
+
+  // Colour population block.
+  const cs = d.colorStats;
+  let colorBlock = '';
+  if (isColored && cs) {
+    const items = (cs.byItem || [])
+      .map((r) => `<tr><td>${esc(r.item_name || r.item_id || '—')}</td><td class="mono">${esc(r.item_id || '')}</td><td>${fmt(r.c)}</td></tr>`)
+      .join('');
+    const owners = (cs.byOwner || [])
+      .map((r) => {
+        const who = r.username
+          ? `<a href="https://sky.shiiyu.moe/stats/${encodeURIComponent(r.username)}" target="_blank" rel="noopener">${esc(r.username)}</a>`
+          : `<span class="mono">${esc(String(r.account_uuid || '—').slice(0, 12))}…</span>`;
+        return `<tr><td>${who}</td><td>${fmt(r.c)}</td></tr>`;
+      })
+      .join('');
+    colorBlock = `
+      <div class="detail-section">
+        <h4>Colour population — <span class="mono">#${esc(cs.hex)}</span>${cs.subcategory ? ` <span class="badge exotic">${esc(cs.subcategory.replace('_', ' '))}</span>` : ''}</h4>
+        <div class="pop-summary">
+          <div class="pop-stat"><b>${fmt(cs.total)}</b>total pieces of this colour</div>
+          <div class="pop-stat"><b>${fmt(cs.distinctOwners)}</b>distinct owners</div>
+        </div>
+        <div class="detail-cols">
+          <div>
+            <div class="detail-label">By item type</div>
+            <table class="kv"><tbody>${items || '<tr><td class="muted">—</td></tr>'}</tbody></table>
+          </div>
+          <div>
+            <div class="detail-label">Who has this colour</div>
+            <table class="kv"><tbody>${owners || '<tr><td class="muted">—</td></tr>'}</tbody></table>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="detail-head">
+      ${swatch}
+      <div>
+        <h3>${esc(f.item_name || f.item_id || 'Unknown')}</h3>
+        <div class="card-sub mono">${esc(f.item_id || '')}${isColored ? ' · #' + esc(f.hex) : ''}</div>
+        <div class="badges">
+          <span class="badge ${esc(f.category)}">${esc((f.subcategory || f.category).replace('_', ' '))}</span>
+          ${f.rarity ? `<span class="badge">${esc(f.rarity.replace('_', ' '))}</span>` : ''}
+          ${f.confidence ? `<span class="badge conf-${esc(f.confidence)}">${esc(f.confidence)} conf</span>` : ''}
+        </div>
+      </div>
+    </div>
+
+    ${f.reason ? `<p class="reason">${esc(f.reason)}</p>` : ''}
+
+    <div class="detail-section">
+      <h4>Owner &amp; location</h4>
+      <table class="kv"><tbody>
+        <tr><td>Owner</td><td>${owner}</td></tr>
+        <tr><td>Found in</td><td>${esc(f.location || '—')}</td></tr>
+        <tr><td>Source</td><td>${esc(f.source || '—')}</td></tr>
+        ${f.price ? `<tr><td>Listed price (AH)</td><td>${fmt(f.price)} coins</td></tr>` : ''}
+      </tbody></table>
+    </div>
+
+    <div class="detail-section">
+      <h4>Base item value <span class="muted">(non-dyed ${esc(f.item_id || 'item')})</span></h4>
+      <table class="kv"><tbody>${priceRows}</tbody></table>
+      <div id="detail-spark"></div>
+      <p class="hint">Dyeing doesn't change the item id, so this is the AH/Bazaar value of the plain piece. Exotic colour is a separate premium on top.</p>
+    </div>
+
+    ${colorBlock}`;
+}
 
 // ---------- prices ----------
 $('#price-form').addEventListener('submit', async (e) => {

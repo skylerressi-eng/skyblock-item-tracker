@@ -76,3 +76,31 @@ test('findings: since filter returns only newer rows', () => {
   assert.ok(newer.some((f) => f.item_uuid === 'q-1'));
   assert.equal(repo.queryFindings({ since: repo.latestFindingTs() }).length, 0);
 });
+
+test('hexStats: aggregates a colour across DIFFERENT item types and owners', () => {
+  const mk = (uuid, itemId, owner, user) => repo.insertFinding({
+    item_uuid: uuid, item_id: itemId, item_name: itemId, category: 'exotic',
+    subcategory: 'OG_DYED', hex: 'abcdef', confidence: 'high',
+    account_uuid: owner, username: user, source: 'test',
+  });
+  mk('h-1', 'CRYSTAL_HELMET', 'own-1', 'Alice');
+  mk('h-2', 'WISE_DRAGON_CHESTPLATE', 'own-1', 'Alice');
+  mk('h-3', 'MAGMA_LEGGINGS', 'own-2', 'Bob');
+
+  const s = repo.hexStats('#ABCDEF'); // case + '#' tolerant
+  assert.equal(s.total, 3, 'counts every piece of the colour');
+  assert.equal(s.distinctOwners, 2);
+  assert.equal(s.byItem.length, 3, 'three different item types share the colour');
+  assert.equal(s.byOwner.find((o) => o.username === 'Alice').c, 2);
+});
+
+test('getFinding + findingsByHex round-trip', () => {
+  const { rowid } = repo.insertFinding({
+    item_uuid: 'g-1', item_id: 'X', item_name: 'X', category: 'exotic',
+    subcategory: 'PURE', hex: '00ff00', confidence: 'high', source: 'test',
+  });
+  const f = repo.getFinding(rowid);
+  assert.equal(f.item_uuid, 'g-1');
+  assert.ok(repo.findingsByHex('00ff00').some((r) => r.item_uuid === 'g-1'));
+  assert.equal(repo.getFinding(999999), null);
+});

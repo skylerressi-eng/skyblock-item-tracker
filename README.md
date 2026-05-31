@@ -150,6 +150,8 @@ friends-of-friends.
 | --- | --- | --- |
 | `POST` | `/api/scan/:username` | Scan a player now, classify items, store findings |
 | `GET` | `/api/findings` | Browse findings. Filters: `category, subcategory, confidence, source, q, username, since, limit, offset` (`since`=epoch ms powers live updates) |
+| `GET` | `/api/findings/:id` | Detail view: the finding + base (non-dyed) item price/history + colour population |
+| `GET` | `/api/findings/by-hex/:hex` | Every finding sharing a colour + counts by item and owner |
 | `GET` | `/api/crawl` | Crawler + queue status, recent activity |
 | `POST` | `/api/crawl/enqueue` | Body `{username}` or `{uuid}` — add an account to the crawl |
 | `POST` | `/api/crawl/seed` | Reload `seeds.json` into the queue |

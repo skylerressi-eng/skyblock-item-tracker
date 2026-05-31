@@ -202,6 +202,41 @@ export const repo = {
     return (row && row.m) || 0;
   },
 
+  // One finding by id (for the detail view).
+  getFinding(id) {
+    const row = getDb().prepare('SELECT * FROM findings WHERE id = ?').get(Number(id));
+    return row ? hydrate(row) : null;
+  },
+
+  // Colour-population stats: how many findings carry this exact hex (across ALL
+  // item types, not just one piece), plus a breakdown by item and by owner.
+  hexStats(hex) {
+    const d = getDb();
+    const h = String(hex || '').toLowerCase().replace(/^#/, '');
+    if (!h) return null;
+    const total = d.prepare('SELECT COUNT(*) c FROM findings WHERE hex = ?').get(h).c;
+    const owners = d.prepare('SELECT COUNT(DISTINCT account_uuid) c FROM findings WHERE hex = ? AND account_uuid IS NOT NULL').get(h).c;
+    const byItem = d
+      .prepare('SELECT item_id, item_name, COUNT(*) c FROM findings WHERE hex = ? GROUP BY item_id ORDER BY c DESC LIMIT 20')
+      .all(h);
+    const byOwner = d
+      .prepare(`SELECT account_uuid, username, COUNT(*) c FROM findings WHERE hex = ?
+                GROUP BY account_uuid ORDER BY c DESC LIMIT 20`)
+      .all(h);
+    const subcategory = (d.prepare('SELECT subcategory FROM findings WHERE hex = ? AND subcategory IS NOT NULL LIMIT 1').get(h) || {}).subcategory || null;
+    return { hex: h, subcategory, total, distinctOwners: owners, byItem, byOwner };
+  },
+
+  // Every finding sharing a hex (the "who else has this colour" list).
+  findingsByHex(hex, limit = 50) {
+    const h = String(hex || '').toLowerCase().replace(/^#/, '');
+    if (!h) return [];
+    return getDb()
+      .prepare('SELECT * FROM findings WHERE hex = ? ORDER BY found_at DESC LIMIT ?')
+      .all(h, Math.min(Number(limit) || 50, 200))
+      .map(hydrate);
+  },
+
   // ---- learned piece colours -------------------------------------------
   recordPieceColor(itemId, hex) {
     if (!itemId || !hex) return;
