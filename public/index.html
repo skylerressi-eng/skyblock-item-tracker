@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkyBlock Rare &amp; Exotic Item Tracker</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1>SkyBlock Item Tracker</h1>
+        <p class="tagline">Rare &amp; exotic item finder · powered by Hypixel, Coflnet &amp; SkyCrypt</p>
+      </div>
+    </div>
+    <div id="stats" class="stat-chips"></div>
+  </header>
+
+  <main>
+    <!-- SCAN -->
+    <section class="panel">
+      <h2>Scan a player</h2>
+      <p class="hint">Type any Minecraft username (or UUID). We pull their SkyBlock profiles, classify every item, and store the rares.</p>
+      <form id="scan-form" class="row">
+        <input id="scan-input" type="text" placeholder="e.g. Technoblade" autocomplete="off" />
+        <button type="submit">Scan</button>
+      </form>
+      <div id="scan-result" class="result"></div>
+    </section>
+
+    <!-- BROWSE -->
+    <section class="panel">
+      <h2>Findings database</h2>
+      <div class="filters">
+        <div id="cat-filters" class="chips"></div>
+        <div class="row">
+          <input id="find-search" type="text" placeholder="search item / player / hex…" />
+          <select id="conf-filter">
+            <option value="">any confidence</option>
+            <option value="high">high only</option>
+            <option value="low">low only</option>
+          </select>
+          <select id="source-filter">
+            <option value="">any source</option>
+            <option value="manual">player scan</option>
+            <option value="ah">auction house</option>
+            <option value="sample">sample data</option>
+          </select>
+        </div>
+      </div>
+      <div id="findings" class="grid"></div>
+      <div class="center"><button id="load-more" class="ghost" hidden>Load more</button></div>
+    </section>
+
+    <!-- PRICES -->
+    <section class="panel">
+      <h2>Price history</h2>
+      <p class="hint">Item ID lookup against Coflnet (deepest free AH + Bazaar history).</p>
+      <form id="price-form" class="row">
+        <input id="price-input" type="text" placeholder="e.g. HYPERION" autocomplete="off" />
+        <button type="submit">Look up</button>
+      </form>
+      <div id="price-result" class="result"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      Data: <a href="https://api.hypixel.net" target="_blank" rel="noopener">Hypixel API</a> ·
+      <a href="https://sky.coflnet.com" target="_blank" rel="noopener">Coflnet</a> ·
+      <a href="https://sky.shiiyu.moe" target="_blank" rel="noopener">SkyCrypt</a>.
+      Not affiliated with Hypixel.
+    </p>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

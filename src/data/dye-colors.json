@@ -1,0 +1,5 @@
+{
+  "_note": "Optional map of SkyBlock dye item id -> resulting hex, used only to label legitimately-dyed pieces. Exotic detection does NOT rely on this list: any leather item carrying an ExtraAttributes.dye_item is treated as a normal dyed item (not exotic) regardless of whether the id appears here. Expand as you like.",
+  "DYE_PURE_BLACK": "1c1c1c",
+  "DYE_PURE_WHITE": "f9fffe"
+}

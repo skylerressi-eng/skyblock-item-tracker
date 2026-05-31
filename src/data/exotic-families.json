@@ -1,0 +1,19 @@
+{
+  "_note": "Seed lists of known exotic hex colours per family (lowercase, no '#'). An off-default armour colour that exactly matches an entry here is tagged with that family; otherwise it is tagged generic 'EXOTIC'. The PURE list is exhaustive; the other families are intentionally small seeds — expand them from community datasets (e.g. the SkyBlock exotics community) for sharper sub-classification. The engine works correctly with empty families; it just labels more things 'EXOTIC'.",
+  "PURE": [
+    "000000",
+    "ffffff",
+    "ff0000",
+    "00ff00",
+    "0000ff",
+    "ffff00",
+    "00ffff",
+    "ff00ff"
+  ],
+  "CRYSTAL": [],
+  "FAIRY": [],
+  "OG_FAIRY": [],
+  "SPOOKY": [],
+  "BLEACHED": [],
+  "GLITCHED": []
+}

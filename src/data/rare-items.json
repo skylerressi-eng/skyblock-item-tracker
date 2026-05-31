@@ -1,0 +1,35 @@
+{
+  "_note": "Curated item IDs to always flag, independent of rarity tier. Edit freely. 'category' is the top-level bucket shown in the UI: use 'game_breaker' for build-defining / meta items and 'curated_rare' for ultra-rare collectibles. Any entry with id 'EXAMPLE_ITEM_ID' is ignored.",
+  "items": [
+    {
+      "id": "CAKE_SOUL",
+      "label": "Cake Soul",
+      "category": "curated_rare",
+      "subcategory": "COLLECTOR",
+      "note": "Extremely rare collectible"
+    },
+    {
+      "id": "PARTY_HAT_CRAB",
+      "label": "Party Hat (Crab)",
+      "category": "curated_rare",
+      "subcategory": "COLLECTOR",
+      "note": "Rare event cosmetic"
+    },
+    {
+      "id": "PARTY_HAT_CRAB_ANIMATED",
+      "label": "Party Hat (Crab, Animated)",
+      "category": "curated_rare",
+      "subcategory": "COLLECTOR",
+      "note": "Rare animated event cosmetic"
+    }
+  ],
+  "game_breakers": [
+    {
+      "id": "EXAMPLE_ITEM_ID",
+      "label": "Example - replace me",
+      "category": "game_breaker",
+      "subcategory": "GAME_BREAKER",
+      "note": "Add the item IDs you consider game-breaking / meta-defining here"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "skyblock-item-tracker",
+  "version": "0.1.0",
+  "description": "Hypixel SkyBlock rare + exotic item tracker: scans profiles and the Auction House, classifies exotic armor colors and rare items, and stores findings in a searchable database.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "seed": "node scripts/seed-sample.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "express": "^4.21.2",
+    "prismarine-nbt": "^2.5.0"
+  },
+  "license": "MIT"
+}
