@@ -72,6 +72,31 @@ main {
 .panel h2 { margin: 0 0 4px; font-size: 17px; }
 .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
 
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.live-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #555; display: inline-block; }
+.dot.on { background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.engine-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.engine-stat {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.engine-stat b { color: var(--text); font-size: 14px; display: block; }
+.engine-stat.live b { color: var(--accent-2); }
+
+@keyframes flashIn {
+  from { background: rgba(0, 212, 160, 0.22); border-color: var(--accent-2); }
+  to { background: var(--panel-2); }
+}
+.card.flash { animation: flashIn 2.2s ease-out; }
+.grid.live:empty::after { content: "Waiting for the crawler to find something…"; color: var(--muted); font-size: 13px; }
+
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
 input, select, button {
   font: inherit;
@@ -154,6 +179,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .center { text-align: center; margin-top: 16px; }
 .error { color: var(--danger); }
 .ok { color: var(--accent-2); }
+.warn-text { color: var(--gold); }
 
 table.kv { border-collapse: collapse; width: 100%; font-size: 14px; }
 table.kv td { padding: 6px 10px; border-bottom: 1px solid var(--line); }

@@ -1,0 +1,15 @@
+{
+  "_note": "Bootstrap usernames for the account crawler. These are well-known, public SkyBlock players / personalities — good starting points because their profiles are item-rich and their friend graphs (with a Hypixel key) fan out into the active player base. Edit freely; the crawler also self-expands from Auction House sellers. Unknown/renamed names simply fail to resolve and are skipped, so a few dead entries here are harmless.",
+  "usernames": [
+    "Technoblade",
+    "Refraction",
+    "Jadocs",
+    "Simplyfiable",
+    "Plancke",
+    "Connorlinfoot",
+    "ThirtyVirus",
+    "Antonio",
+    "Dctr",
+    "MasonOC"
+  ]
+}

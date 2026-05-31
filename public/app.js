@@ -14,7 +14,7 @@ const CATEGORIES = [
 
 const state = { category: '', q: '', confidence: '', source: '', offset: 0 };
 
-// ---------- stats ----------
+// ---------- stats + engine bar ----------
 async function loadStats() {
   try {
     const s = await (await fetch('/api/stats')).json();
@@ -25,16 +25,32 @@ async function loadStats() {
     for (const c of (s.byCategory || []).slice(0, 4)) {
       chips.push(`<span class="stat-chip">${esc(c.category)}: <b>${fmt(c.c)}</b></span>`);
     }
-    if (s.ahWorker && s.ahWorker.enabled) {
-      chips.push(`<span class="stat-chip ok">AH worker on</span>`);
-    }
     if (s.capabilities && !s.capabilities.hypixelKey) {
       chips.push(`<span class="stat-chip warn">no Hypixel key → SkyCrypt fallback</span>`);
+    } else if (s.capabilities && s.capabilities.hypixelKey) {
+      chips.push(`<span class="stat-chip ok">Hypixel key ✓ friend-chain on</span>`);
     }
     $('#stats').innerHTML = chips.join('');
+    renderEngineBar(s);
   } catch {
     $('#stats').innerHTML = '<span class="stat-chip warn">stats unavailable</span>';
   }
+}
+
+function renderEngineBar(s) {
+  const ah = s.ahWorker || {};
+  const cr = s.crawler || {};
+  const q = cr.queue || {};
+  const t = cr.totals || {};
+  const cards = [
+    `<div class="engine-stat ${ah.enabled ? 'live' : ''}"><b>${ah.enabled ? (ah.running ? 'scanning…' : 'on') : 'off'}</b>AH worker</div>`,
+    `<div class="engine-stat ${cr.enabled ? 'live' : ''}"><b>${cr.enabled ? (cr.running ? 'crawling…' : 'on') : 'off'}</b>Crawler</div>`,
+    `<div class="engine-stat"><b>${fmt(q.queued || 0)}</b>queued</div>`,
+    `<div class="engine-stat"><b>${fmt(q.done || 0)}</b>accounts crawled</div>`,
+    `<div class="engine-stat"><b>${fmt(t.scanned || 0)}</b>scanned this run</div>`,
+  ];
+  if (t.errors) cards.push(`<div class="engine-stat"><b>${fmt(t.errors)}</b>errors</div>`);
+  $('#engine-bar').innerHTML = cards.join('');
 }
 
 // ---------- scan ----------
@@ -48,16 +64,37 @@ $('#scan-form').addEventListener('submit', async (e) => {
     const res = await fetch(`/api/scan/${encodeURIComponent(name)}`, { method: 'POST' });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'scan failed');
+    const warn = data.warning ? ` · <span class="warn-text">${esc(data.warning)}</span>` : '';
     box.innerHTML =
       `<p class="ok">Scanned <b>${esc(data.username || name)}</b> · ${data.profilesScanned} profile(s) · ` +
       `${fmt(data.itemsScanned)} items · <b>${fmt(data.findings.length)}</b> findings ` +
-      `(${fmt(data.newFindings)} new) · mode: ${esc(data.mode)}</p>`;
+      `(${fmt(data.newFindings)} new) · mode: ${esc(data.mode)}${warn}</p>`;
     box.innerHTML += renderCards(data.findings);
     loadStats();
     resetAndLoadFindings();
   } catch (err) {
     box.innerHTML = `<p class="error">✕ ${esc(err.message)}</p>
       <p class="hint">If this says 403 / timed out, the data APIs are blocked by this environment's network policy. Run locally or loosen the policy.</p>`;
+  }
+});
+
+// "Add to crawl" — enqueue without waiting for a full scan.
+$('#queue-btn').addEventListener('click', async () => {
+  const name = $('#scan-input').value.trim();
+  if (!name) return;
+  const box = $('#scan-result');
+  try {
+    const res = await fetch('/api/crawl/enqueue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: name }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'enqueue failed');
+    box.innerHTML = `<p class="ok">Queued <b>${esc(name)}</b> for the crawler${data.added ? '' : ' (already queued)'}.</p>`;
+    loadStats();
+  } catch (err) {
+    box.innerHTML = `<p class="error">✕ ${esc(err.message)}</p>`;
   }
 });
 
@@ -75,7 +112,7 @@ function renderCatFilters() {
   );
 }
 
-function cardFor(f) {
+function cardFor(f, flash = false) {
   const isExotic = f.category === 'exotic' && f.hex;
   const swatch = isExotic
     ? `<div class="swatch" style="background:#${esc(f.hex)}" title="#${esc(f.hex)}"></div>`
@@ -86,7 +123,7 @@ function cardFor(f) {
   const price = f.price ? `${fmt(f.price)} coins` : '';
   const confBadge = f.confidence === 'low' ? `<span class="badge conf-low">low conf</span>` : '';
   return `
-    <div class="card">
+    <div class="card${flash ? ' flash' : ''}">
       <div class="card-head">
         ${swatch}
         <div>
@@ -193,7 +230,56 @@ function drawSpark(box, history) {
   ctx.stroke();
 }
 
+// ---------- live discovery feed ----------
+// Polls for findings newer than the newest we've shown and prepends them, so the
+// site updates itself as the background crawler files new rares.
+const live = { since: 0, seen: new Set(), enabled: true, max: 24, timer: null };
+
+async function pollLive(first = false) {
+  if (!live.enabled) return;
+  try {
+    const url = first ? '/api/findings?limit=12' : `/api/findings?since=${live.since}&limit=40`;
+    const data = await (await fetch(url)).json();
+    const rows = data.findings || [];
+    if (typeof data.latest === 'number') live.since = Math.max(live.since, data.latest);
+
+    const feed = $('#live-feed');
+    // On first load, just render the most recent few (newest first).
+    if (first) {
+      for (const f of rows) live.seen.add(f.id);
+      feed.innerHTML = rows.map(cardFor).join('');
+      return;
+    }
+    // Incremental: prepend genuinely-new findings with a flash.
+    const fresh = rows.filter((f) => !live.seen.has(f.id));
+    if (!fresh.length) return;
+    for (const f of fresh) live.seen.add(f.id);
+    // API returns newest-first; insert oldest-of-the-batch first so newest ends on top.
+    for (const f of fresh.reverse()) {
+      feed.insertAdjacentHTML('afterbegin', cardFor(f, true));
+    }
+    while (feed.children.length > live.max) feed.removeChild(feed.lastChild);
+  } catch {
+    /* transient; try again next tick */
+  }
+}
+
+function setLive(on) {
+  live.enabled = on;
+  $('#live-dot').classList.toggle('on', on);
+  if (on && !live.timer) {
+    live.timer = setInterval(() => { pollLive(false); loadStats(); }, 4000);
+  } else if (!on && live.timer) {
+    clearInterval(live.timer);
+    live.timer = null;
+  }
+}
+
+$('#live-toggle').addEventListener('change', (e) => setLive(e.target.checked));
+
 // ---------- boot ----------
 renderCatFilters();
 loadStats();
 loadFindings(false);
+pollLive(true);
+setLive(true);

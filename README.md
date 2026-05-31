@@ -4,25 +4,30 @@ A self-hosted web app that scans Hypixel SkyBlock players and the live Auction
 House, **classifies rare and exotic items**, and stores every finding in a
 searchable database.
 
-Built around your two priorities:
+Built around your priorities:
 
 1. **Rare + exotic detection first.** The core is a classification engine that
    flags exotic leather-armour colours, special rarities, and curated
    "game-breaker" items.
-2. **Two ways to discover items:** type a username (on-demand scan) **and** an
-   optional background worker that sweeps the live Auction House.
+2. **Discover accounts automatically.** A background **crawler** drains a queue
+   of accounts — seed usernames → their friends (with a key) → every Auction
+   House seller — scanning each profile and filing what it finds.
+3. **The website updates itself.** A live dashboard streams new discoveries in
+   as the crawler finds them — no refresh needed.
 
 > ⚠️ **Read this first — two realities**
 >
 > 1. **Hypixel has no "list every player" API.** A profile scan needs a specific
->    username/UUID. So "scan everyone" is done two ways here: (a) you type names,
->    and (b) the AH worker discovers accounts + items from what's actively being
->    traded (the auctions endpoint exposes seller UUIDs **and** full item NBT).
-> 2. **The data APIs may be blocked by your network.** `api.hypixel.net`,
->    `sky.coflnet.com`, and `sky.shiiyu.moe` must be reachable for live scans. In
->    some sandboxes they return HTTP 403. If so, run locally or allow those
->    domains. Use `npm run seed` to populate sample data and explore the UI
->    offline.
+>    username/UUID, so "scan everyone" is approximated by a crawl that keeps
+>    discovering new accounts:
+>    - **seed usernames** (`src/data/seeds.json`) — popular players to start from
+>    - **friends-of-friends chain** — walks the social graph **(needs an API key;
+>      Hypixel's friends endpoint is authenticated — there is no keyless way)**
+>    - **Auction House sellers** — every active trader becomes a scan target
+>      **(keyless; this is the main discovery engine without a key)**
+> 2. **The data APIs must be reachable.** `api.hypixel.net`, `sky.coflnet.com`,
+>    and `sky.shiiyu.moe` need to be reachable. Some sandboxes return HTTP 403;
+>    on your own machine they work. Use `npm run seed` to explore the UI offline.
 
 ---
 
@@ -30,7 +35,7 @@ Built around your two priorities:
 
 | Source | Used for | Key? |
 | --- | --- | --- |
-| [api.hypixel.net](https://api.hypixel.net) | Live AH (`/skyblock/auctions`), Bazaar, and **full player inventories** (`/v2/skyblock/profiles`, decoded from NBT here) | Bazaar/AH: no. Profiles: yes |
+| [api.hypixel.net](https://api.hypixel.net) | Live AH (`/skyblock/auctions`) + Bazaar **(no key)**; **full inventories** (`/v2/skyblock/profiles`) and **friends** (`/v2/friends`) **(key)** | Mixed |
 | [sky.coflnet.com](https://sky.coflnet.com) | Deepest free **price history** (~5y AH + Bazaar) | No |
 | [sky.shiiyu.moe](https://sky.shiiyu.moe) (SkyCrypt) | Fallback profile/item source when no Hypixel key is set | No |
 | Mojang / Ashcon | Username ⇄ UUID resolution | No |
@@ -62,10 +67,43 @@ families; it just labels more things generic `EXOTIC`.
 
 ### Other categories
 - **`special_rarity`** — items whose tier is in `RARE_TIERS`
-  (default `MYTHIC, DIVINE, SPECIAL, VERY_SPECIAL`; `LEGENDARY` is excluded as
-  too common).
+  (default `SPECIAL, VERY_SPECIAL`; tune via env).
 - **`curated_rare` / `game_breaker`** — explicit item IDs you list in
   [`src/data/rare-items.json`](src/data/rare-items.json). Edit freely.
+
+---
+
+## How discovery works (the "scan everyone" engine)
+
+A background **crawler** (`src/scanner/crawler.js`) drains a SQLite-backed
+queue of accounts. Each tick it claims a small batch, scans those profiles,
+files findings, and **enqueues newly-discovered accounts** — so the frontier
+keeps growing on its own:
+
+```
+seeds.json ─┐
+            ├─► crawl_queue ──► scan profile ──► classify ──► findings ──► live UI
+AH sellers ─┤                        │
+  friends ──┘◄───────────────────────┘  (friends needs a Hypixel key)
+```
+
+- **Seeds** — popular players in [`src/data/seeds.json`](src/data/seeds.json),
+  loaded on boot (top priority).
+- **Auction House sellers** — the AH worker feeds every seller UUID into the
+  queue. **Keyless**, and the main engine when you have no API key.
+- **Friends-of-friends** — with a key, each scanned account's friends are
+  enqueued, walking the social graph outward from the seeds.
+
+The queue is idempotent (no account is scanned twice within `RESCAN_AFTER_MS`)
+and backlog-capped (`MAX_QUEUE_BACKLOG`) so it can run 24/7.
+
+## Live updates
+
+The site updates itself. The dashboard polls `/api/findings?since=<ts>` every
+few seconds and prepends anything new (with a flash), and shows live engine
+stats (queue depth, accounts crawled, AH worker state). Toggle it off with the
+**Auto-updating** switch. This means: the crawler takes data → stores it → the
+website reflects it, automatically.
 
 ---
 
@@ -73,21 +111,22 @@ families; it just labels more things generic `EXOTIC`.
 
 ```bash
 npm install
-npm test            # unit-test the classification + NBT engine (no network)
-npm run seed        # optional: insert sample findings to explore the UI offline
-npm start           # http://localhost:3000
+npm test            # unit-test the engine + queue (no network) — 23 tests
+npm run seed        # optional: sample findings to explore the UI offline
+npm start           # http://localhost:3000  (AH worker + crawler start automatically)
 ```
 
-For full inventory scans, set a Hypixel key (see `.env.example`):
+To unlock full inventories + the friend-chain, add your free Hypixel key:
 
 ```bash
 cp .env.example .env
-# edit .env: HYPIXEL_API_KEY=...   and optionally AH_WORKER=true
+# edit .env:  HYPIXEL_API_KEY=your-key-here
 npm start
 ```
 
-Without a key, player scans use the SkyCrypt fallback (fewer items). The AH
-worker and price history never need a key.
+Everything runs locally — Node + SQLite, no cloud. Without a key it still works
+(SkyCrypt fallback + AH-seller crawl); the key just makes it richer and turns on
+friends-of-friends.
 
 ---
 
@@ -95,10 +134,13 @@ worker and price history never need a key.
 
 | Method | Route | Description |
 | --- | --- | --- |
-| `POST` | `/api/scan/:username` | Scan a player, classify items, store findings |
-| `GET` | `/api/findings` | Browse findings. Filters: `category, subcategory, confidence, source, q, username, limit, offset` |
+| `POST` | `/api/scan/:username` | Scan a player now, classify items, store findings |
+| `GET` | `/api/findings` | Browse findings. Filters: `category, subcategory, confidence, source, q, username, since, limit, offset` (`since`=epoch ms powers live updates) |
+| `GET` | `/api/crawl` | Crawler + queue status, recent activity |
+| `POST` | `/api/crawl/enqueue` | Body `{username}` or `{uuid}` — add an account to the crawl |
+| `POST` | `/api/crawl/seed` | Reload `seeds.json` into the queue |
 | `GET` | `/api/prices/:item?span=day` | Current price + history (Coflnet, cached) |
-| `GET` | `/api/stats` | DB counts, AH worker status, capability flags |
+| `GET` | `/api/stats` | DB counts, AH worker + crawler status, capability flags |
 | `GET` | `/api/health` | Liveness |
 
 ---
@@ -108,7 +150,7 @@ worker and price history never need a key.
 ```
 src/
   config.js            env + constants
-  db/index.js          SQLite schema + repo (better-sqlite3)
+  db/index.js          SQLite schema + repo (findings, accounts, crawl_queue…)
   clients/             hypixel, coflnet, skycrypt, mojang, http
   items/
     nbt.js             base64+gzip+NBT  -> simplified items
@@ -118,14 +160,16 @@ src/
     rarity.js          tier + curated classification
     classify.js        run all classifiers
     data.js            load JSON datasets
-  data/                exotic-families / dye-colors / rare-items (editable)
+  data/                exotic-families / dye-colors / rare-items / seeds (editable)
   scanner/
-    scanProfile.js     on-demand player scan
-    ahWorker.js        background Auction House sweep
-  routes/              scan, findings, prices, stats
-  server.js            Express entry
-public/                vanilla JS frontend (scan, browse, prices)
-test/                  engine + NBT unit tests
+    scanProfile.js     scan one player (key path + SkyCrypt fallback, returns friends)
+    crawler.js         queue-draining account crawler  ◀ discovery engine
+    ahWorker.js        background Auction House sweep (feeds sellers to the crawler)
+    context.js         shared classify context + finding builder
+  routes/              scan, findings, crawl, prices, stats
+  server.js            Express entry (starts AH worker + crawler)
+public/                vanilla JS frontend (live feed, scan, browse, prices)
+test/                  engine + NBT + queue unit tests (23)
 scripts/seed-sample.js sample data for offline demo
 ```
 
@@ -135,8 +179,8 @@ scripts/seed-sample.js sample data for offline demo
 - Sync `exotic-families.json` from a community colour dataset for precise
   sub-categorisation (Crystal/Fairy/OG Fairy/etc.).
 - Per-finding price estimates by joining the AH/Bazaar data.
-- Seed the AH worker's discovered usernames into the on-demand scan queue.
 - Persisted dedupe of "same exotic re-listed" across time.
+- Server-Sent Events instead of polling for the live feed.
 
 Not affiliated with Hypixel or Mojang. For educational/personal use; respect the
 data providers' rate limits and terms.

@@ -34,3 +34,27 @@ export async function getProfiles(uuid) {
   }
   return data.profiles || [];
 }
+
+// A player's friends list — powers the friends-of-friends crawl chain. Requires
+// an API key (there is no keyless way to read friends). Returns an array of the
+// *other* party's undashed UUIDs.
+export async function getFriendUuids(uuid) {
+  if (!config.hypixelApiKey) {
+    const err = new Error('HYPIXEL_API_KEY not set');
+    err.code = 'NO_KEY';
+    throw err;
+  }
+  const data = await getJson(
+    `${config.hypixelBase}/v2/friends?uuid=${encodeURIComponent(uuid)}`,
+    { headers: { 'API-Key': config.hypixelApiKey } },
+  );
+  const records = (data && data.records) || [];
+  const me = uuid.replace(/-/g, '').toLowerCase();
+  const out = [];
+  for (const r of records) {
+    // The friend is whichever side isn't us.
+    const other = (r.uuidReceiver || '').toLowerCase() === me ? r.uuidSender : r.uuidReceiver;
+    if (other) out.push(other.replace(/-/g, '').toLowerCase());
+  }
+  return out;
+}

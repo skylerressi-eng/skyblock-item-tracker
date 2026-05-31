@@ -6,7 +6,9 @@ import { scanRouter } from './routes/scan.js';
 import { findingsRouter } from './routes/findings.js';
 import { pricesRouter } from './routes/prices.js';
 import { statsRouter } from './routes/stats.js';
+import { crawlRouter } from './routes/crawl.js';
 import { startAhWorker } from './scanner/ahWorker.js';
+import { startCrawler } from './scanner/crawler.js';
 
 getDb(); // initialize schema before serving
 
@@ -18,6 +20,7 @@ app.use('/api/scan', scanRouter);
 app.use('/api/findings', findingsRouter);
 app.use('/api/prices', pricesRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/crawl', crawlRouter);
 
 app.use(express.static(path.join(ROOT, 'public')));
 
@@ -28,8 +31,13 @@ app.use((err, req, res, _next) => {
 
 app.listen(config.port, () => {
   console.log(`skyblock-item-tracker listening on http://localhost:${config.port}`);
-  if (!config.hypixelApiKey) {
-    console.log('[info] HYPIXEL_API_KEY not set — profile scans use the SkyCrypt fallback (fewer items).');
+  if (config.hypixelApiKey) {
+    console.log('[info] Hypixel API key detected — full inventory scans + friend-chain crawl enabled.');
+  } else {
+    console.log('[info] No HYPIXEL_API_KEY — using SkyCrypt fallback (fewer items) + AH-seller crawl.');
   }
+  // Background engines: AH worker discovers items/sellers; crawler drains the
+  // account frontier. Both write findings the live dashboard streams in.
   startAhWorker();
+  startCrawler();
 });

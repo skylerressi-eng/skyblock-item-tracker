@@ -5,6 +5,7 @@ import { decodeSingleItem } from '../items/nbt.js';
 import { normalizeNbtItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
 import { makeCtx, toFinding } from './context.js';
+import { enqueueSeller } from './crawler.js';
 
 let timer = null;
 let running = false;
@@ -54,7 +55,12 @@ export async function runCycle() {
       }
 
       if (it.hex && !(it.extra && it.extra.dye_item)) ctx.recordPieceColor(it.itemId, it.hex);
-      if (auc.auctioneer) repo.upsertAccount({ uuid: auc.auctioneer, source: 'ah' });
+      if (auc.auctioneer) {
+        repo.upsertAccount({ uuid: auc.auctioneer, source: 'ah' });
+        // Feed the seller into the crawl frontier — this is the keyless engine
+        // behind "scan everyone": every active trader becomes a scan target.
+        enqueueSeller(auc.auctioneer);
+      }
     }
   }
 

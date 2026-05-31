@@ -69,6 +69,23 @@ CREATE TABLE IF NOT EXISTS scan_jobs (
   updated_at     INTEGER
 );
 
+-- The crawl frontier. Each row is an account to (re)scan. Keyed by uuid when
+-- known, else by lowercased username, so we never enqueue the same target twice.
+CREATE TABLE IF NOT EXISTS crawl_queue (
+  key         TEXT PRIMARY KEY,     -- uuid (preferred) or 'name:<lowercased>'
+  uuid        TEXT,
+  username    TEXT,
+  source      TEXT,                 -- seed | friend | ah | manual
+  depth       INTEGER DEFAULT 0,    -- graph distance from a seed
+  status      TEXT DEFAULT 'queued',-- queued | done | error
+  priority    INTEGER DEFAULT 100,  -- lower = scanned sooner
+  attempts    INTEGER DEFAULT 0,
+  message     TEXT,
+  enqueued_at INTEGER,
+  scanned_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_queue_pick ON crawl_queue(status, priority, enqueued_at);
+
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -157,7 +174,7 @@ export const repo = {
   },
 
   queryFindings({
-    category, subcategory, confidence, source, q, username, limit = 60, offset = 0,
+    category, subcategory, confidence, source, q, username, since, limit = 60, offset = 0,
   } = {}) {
     const where = [];
     const p = {};
@@ -166,6 +183,7 @@ export const repo = {
     if (confidence) { where.push('confidence = @confidence'); p.confidence = confidence; }
     if (source) { where.push('source = @source'); p.source = source; }
     if (username) { where.push('username = @username'); p.username = username; }
+    if (since) { where.push('found_at > @since'); p.since = Number(since); }
     if (q) {
       where.push('(username LIKE @q OR item_name LIKE @q OR item_id LIKE @q OR hex LIKE @q)');
       p.q = `%${q}%`;
@@ -177,6 +195,11 @@ export const repo = {
       .prepare(`SELECT * FROM findings ${clause} ORDER BY found_at DESC LIMIT @limit OFFSET @offset`)
       .all(p)
       .map(hydrate);
+  },
+
+  latestFindingTs() {
+    const row = getDb().prepare('SELECT MAX(found_at) m FROM findings').get();
+    return (row && row.m) || 0;
   },
 
   // ---- learned piece colours -------------------------------------------
@@ -241,6 +264,91 @@ export const repo = {
 
   getScanJob(id) {
     return getDb().prepare('SELECT * FROM scan_jobs WHERE id = ?').get(id);
+  },
+
+  // ---- crawl queue ------------------------------------------------------
+  // Enqueue an account. Idempotent on uuid (or name when uuid unknown). Won't
+  // resurrect a 'done' row unless it's old enough to warrant a re-scan.
+  enqueue({ uuid = null, username = null, source = 'manual', depth = 0, priority = 100 }) {
+    if (!uuid && !username) return { added: false };
+    const key = uuid ? uuid.toLowerCase() : `name:${username.toLowerCase()}`;
+    const t = now();
+    const d = getDb();
+    // better-sqlite3 is synchronous, so check-then-act is race-free here and
+    // lets us report `added` precisely (ON CONFLICT can't distinguish them).
+    const existing = d.prepare('SELECT 1 FROM crawl_queue WHERE key = ?').get(key);
+    if (!existing) {
+      d.prepare(
+        `INSERT INTO crawl_queue (key, uuid, username, source, depth, status, priority, enqueued_at)
+         VALUES (@key, @uuid, @username, @source, @depth, 'queued', @priority, @t)`,
+      ).run({ key, uuid, username, source, depth, priority, t });
+      return { added: true, key };
+    }
+    // Already known: keep the best identity/priority, and requeue only if it
+    // finished long enough ago to warrant a fresh scan.
+    d.prepare(
+      `UPDATE crawl_queue SET
+         uuid = COALESCE(uuid, @uuid),
+         username = COALESCE(username, @username),
+         priority = MIN(priority, @priority),
+         status = CASE
+           WHEN status = 'done' AND (@t - COALESCE(scanned_at, 0)) > @rescan
+             THEN 'queued' ELSE status END
+       WHERE key = @key`,
+    ).run({ key, uuid, username, priority, t, rescan: config.crawler.rescanAfterMs });
+    return { added: false, key };
+  },
+
+  // Atomically claim a batch of queued accounts (mark them in-progress so
+  // concurrent ticks don't double-scan). Returns the claimed rows.
+  claimBatch(limit = 3) {
+    const d = getDb();
+    const claim = d.transaction((n) => {
+      const rows = d
+        .prepare(
+          `SELECT * FROM crawl_queue WHERE status = 'queued'
+           ORDER BY priority ASC, enqueued_at ASC LIMIT ?`,
+        )
+        .all(n);
+      const mark = d.prepare(`UPDATE crawl_queue SET status = 'scanning' WHERE key = ?`);
+      for (const r of rows) mark.run(r.key);
+      return rows;
+    });
+    return claim(limit);
+  },
+
+  finishCrawl(key, { uuid = null, username = null, status = 'done', message = null } = {}) {
+    getDb()
+      .prepare(
+        `UPDATE crawl_queue SET status = @status, message = @message,
+           uuid = COALESCE(@uuid, uuid), username = COALESCE(@username, username),
+           attempts = attempts + 1, scanned_at = @t WHERE key = @key`,
+      )
+      .run({ key, uuid, username, status, message, t: now() });
+  },
+
+  queueStats() {
+    const d = getDb();
+    const rows = d.prepare('SELECT status, COUNT(*) c FROM crawl_queue GROUP BY status').all();
+    const out = { queued: 0, scanning: 0, done: 0, error: 0, total: 0 };
+    for (const r of rows) { out[r.status] = r.c; out.total += r.c; }
+    return out;
+  },
+
+  queuedCount() {
+    return getDb()
+      .prepare("SELECT COUNT(*) c FROM crawl_queue WHERE status IN ('queued','scanning')")
+      .get().c;
+  },
+
+  recentCrawl(limit = 12) {
+    return getDb()
+      .prepare(
+        `SELECT username, uuid, source, status, message, scanned_at
+         FROM crawl_queue WHERE scanned_at IS NOT NULL
+         ORDER BY scanned_at DESC LIMIT ?`,
+      )
+      .all(limit);
   },
 
   // ---- meta -------------------------------------------------------------

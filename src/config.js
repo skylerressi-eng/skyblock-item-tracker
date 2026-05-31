@@ -22,9 +22,10 @@ export const config = {
     process.env.USER_AGENT ||
     'skyblock-item-tracker/0.1 (+https://github.com/skylerressi-eng/skyblock-item-tracker)',
 
-  // Rarity tiers treated as inherently notable. LEGENDARY is intentionally
-  // excluded because it is extremely common.
-  rareTiers: list(process.env.RARE_TIERS, ['MYTHIC', 'DIVINE', 'SPECIAL', 'VERY_SPECIAL']),
+  // Rarity tiers treated as inherently notable. Defaults to the two genuinely
+  // rare event/legacy tiers; LEGENDARY/MYTHIC are intentionally excluded as too
+  // common. (Exotic-colour and curated game-breaker detection run regardless.)
+  rareTiers: list(process.env.RARE_TIERS, ['SPECIAL', 'VERY_SPECIAL']),
 
   // How many copies of a piece we must see before we trust the learned
   // "default" colour. Until then, off-colour pieces are flagged low-confidence.
@@ -40,10 +41,29 @@ export const config = {
   requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 15000),
   priceCacheTtlMs: Number(process.env.PRICE_TTL_MS || 5 * 60 * 1000),
 
-  // Background Auction House discovery worker.
+  // Background Auction House discovery worker. ON by default: the moment the
+  // app starts it sweeps the live AH, decodes items, files rares/exotics, and
+  // feeds every seller UUID into the crawl queue.
   ahWorker: {
-    enabled: bool(process.env.AH_WORKER, false),
+    enabled: bool(process.env.AH_WORKER, true),
     intervalMs: Number(process.env.AH_INTERVAL_MS || 60_000),
     maxPagesPerCycle: Number(process.env.AH_MAX_PAGES || 5),
+  },
+
+  // Account crawler: drains a queue of accounts (seeds -> their friends ->
+  // friends-of-friends [needs a key] + every AH seller), scanning each profile
+  // and classifying its items. This is the engine behind "scan everyone".
+  crawler: {
+    enabled: bool(process.env.CRAWLER, true),
+    intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 8_000),
+    batchSize: Number(process.env.CRAWL_BATCH || 3),
+    // Re-scan an account at most once per this window (avoid re-hammering).
+    rescanAfterMs: Number(process.env.RESCAN_AFTER_MS || 6 * 60 * 60 * 1000),
+    // Cap how many friends to enqueue per scanned account (graph fan-out).
+    maxFriendsPerAccount: Number(process.env.MAX_FRIENDS || 30),
+    // Stop auto-enqueuing AH sellers once the queue backlog exceeds this.
+    maxQueueBacklog: Number(process.env.MAX_QUEUE_BACKLOG || 5000),
+    // Bootstrap the queue from src/data/seeds.json on first run.
+    seedOnStart: bool(process.env.SEED_ON_START, true),
   },
 };

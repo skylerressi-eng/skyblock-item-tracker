@@ -19,13 +19,28 @@
   </header>
 
   <main>
+    <!-- LIVE DISCOVERY -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Live discovery</h2>
+        <label class="live-toggle">
+          <input type="checkbox" id="live-toggle" checked />
+          <span id="live-dot" class="dot"></span> Auto-updating
+        </label>
+      </div>
+      <p class="hint">The background crawler scans the Auction House and player profiles continuously. New rares appear here automatically — no refresh needed.</p>
+      <div id="engine-bar" class="engine-bar"></div>
+      <div id="live-feed" class="grid live"></div>
+    </section>
+
     <!-- SCAN -->
     <section class="panel">
       <h2>Scan a player</h2>
-      <p class="hint">Type any Minecraft username (or UUID). We pull their SkyBlock profiles, classify every item, and store the rares.</p>
+      <p class="hint">Type any Minecraft username (or UUID). We pull their SkyBlock profiles, classify every item, store the rares — and queue them into the crawl.</p>
       <form id="scan-form" class="row">
         <input id="scan-input" type="text" placeholder="e.g. Technoblade" autocomplete="off" />
-        <button type="submit">Scan</button>
+        <button type="submit">Scan now</button>
+        <button type="button" id="queue-btn" class="ghost">Add to crawl</button>
       </form>
       <div id="scan-result" class="result"></div>
     </section>
