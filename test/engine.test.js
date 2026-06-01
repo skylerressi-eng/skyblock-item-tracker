@@ -106,9 +106,12 @@ test('satin: a Satin piece with an off-default colour is random_dyed, NOT exotic
   assert.ok(f.priority < 10, 'random_dyed must rank far below real exotics');
 });
 
-test('satin: substring match catches the whole set (helmet/boots too)', () => {
-  for (const id of ['SATIN_HELMET', 'SATIN_JACKET', 'SATIN_TROUSERS', 'SATIN_SLIPPERS']) {
-    assert.equal(classifyExotic({ itemId: id, hex: '112233', extra: {} }, ctx()).category, 'random_dyed');
+test('random-dyed: all four named cosmetic pieces are downranked, not exotic', () => {
+  // Velvet Top Hat, Cashmere Jacket, Satin Trousers, Oxford Shoes
+  for (const id of ['VELVET_TOP_HAT', 'CASHMERE_JACKET', 'SATIN_TROUSERS', 'OXFORD_SHOES']) {
+    const f = classifyExotic({ itemId: id, hex: '112233', extra: {} }, ctx());
+    assert.equal(f.category, 'random_dyed', `${id} should be random_dyed`);
+    assert.ok(f.priority < 10, `${id} must rank below real exotics`);
   }
 });
 

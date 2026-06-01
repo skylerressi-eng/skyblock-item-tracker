@@ -33,15 +33,19 @@ const LOCATION_LABELS = {
   inventory: 'Inventory',
   ender_chest_contents: 'Ender Chest',
   backpack_contents: 'Backpack',
+  backpack_icons: 'Backpack',
   personal_vault_contents: 'Personal Vault',
   wardrobe_contents: 'Wardrobe',
-  equipment_contents: 'Equipment',
+  equipment_contents: 'Equipment slots',
   talisman_bag: 'Accessory Bag',
   fishing_bag: 'Fishing Bag',
+  quiver: 'Quiver',
   potion_bag: 'Potion Bag',
+  sacks_counts: 'Sacks',
   candy_inventory_contents: 'Candy Bag',
   armor: 'Armor (equipped)',
   inv_armor: 'Armor (equipped)',
+  wardrobe: 'Wardrobe',
   auction: 'Auction House (listed for sale)',
 };
 function locationLabel(loc) {
@@ -52,6 +56,15 @@ function locationLabel(loc) {
     .replace(/_contents$/, '')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Natural-language "where it was found" phrase for the detail view.
+function locationPhrase(f) {
+  const label = locationLabel(f.location);
+  if (f.location === 'auction') return 'Listed on the Auction House';
+  if (!f.location) return 'Location unknown';
+  const who = f.username ? `${f.username}'s` : 'their';
+  return `In ${who} ${label}`;
 }
 
 
@@ -406,6 +419,8 @@ function renderDetail(d) {
     </div>
 
     ${f.reason ? `<p class="reason">${esc(f.reason)}</p>` : ''}
+
+    <div class="found-callout">📍 <b>${esc(locationPhrase(f))}</b></div>
 
     <div class="detail-section">
       <h4>Owner &amp; location</h4>

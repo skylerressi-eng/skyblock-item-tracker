@@ -283,3 +283,12 @@ td.muted, .kv td.muted { color: var(--muted); }
 }
 .sc-btn:hover { filter: brightness(1.1); text-decoration: none; }
 .uuid-cell { font-size: 11px; word-break: break-all; }
+.found-callout {
+  margin: 14px 0 4px;
+  background: rgba(0, 212, 160, 0.1);
+  border: 1px solid #1c5a4a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text);
+}

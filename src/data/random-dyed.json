@@ -1,13 +1,15 @@
 {
-  "_note": "Armour sets that the GAME dyes a RANDOM colour on creation (not player-dyed, not OG/exotic). A piece from one of these sets showing an off-default colour is NOT a rare exotic — it just rolled a random colour. These are filed under the 'random_dyed' category with low priority so they sink below genuine exotics instead of flooding the feed. Matching is by item-id SUBSTRING (uppercased), so 'SATIN' catches SATIN_HELMET, SATIN_TROUSERS, etc. Edit freely — add a pattern to downrank a set, remove one to treat it normally. SATIN is the confirmed case; the rest are common random-dyed cosmetic sets and can be tuned.",
+  "_note": "Armour sets the GAME dyes a RANDOM colour on creation (not player-dyed, not OG/exotic). A piece from one of these sets showing an off-default colour is NOT a rare exotic — it just rolled a random colour. They are filed under the 'random_dyed' category at lowest priority so they never flood the feed. Matching is by item-id SUBSTRING (uppercased): 'SATIN' catches SATIN_TROUSERS, 'OXFORD' catches OXFORD_SHOES, etc. Edit freely — add a pattern to downrank a set, remove one to treat it normally.",
+  "_confirmedItems": {
+    "VELVET_TOP_HAT": "Velvet Top Hat (helmet)",
+    "CASHMERE_JACKET": "Cashmere Jacket (chestplate)",
+    "SATIN_TROUSERS": "Satin Trousers (leggings — the 'satin pants')",
+    "OXFORD_SHOES": "Oxford Shoes (boots)"
+  },
   "patterns": [
     "SATIN",
     "CASHMERE",
     "VELVET",
-    "WOOL_",
-    "FLANNEL",
-    "SUEDE",
-    "TWEED",
-    "POLYESTER"
+    "OXFORD"
   ]
 }
