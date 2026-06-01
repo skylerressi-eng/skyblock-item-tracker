@@ -54,23 +54,39 @@ when their colour is off-default and off-chart — you don't need them listed.
 
 ---
 
-## ⬇ Random-dyed sets (Satin) — downranked, NOT exotic
+## 🚫 Random-dyed sets (Satin / Oxford / Velvet / Cashmere) — NOT exotic
 
-Some sets (e.g. **Satin**) are dyed a **random colour by the game itself** on
-creation. That colour is off-default and carries no `dye_item`, so a naive
-detector would mis-flag it as a rare OG exotic and flood the feed. These are
-detected by item-id pattern ([`random-dyed.json`](../src/data/random-dyed.json),
-substring match so `SATIN` catches the whole set) and filed under the
-**`random_dyed`** category with the lowest priority. They:
+Some cosmetic sets are dyed a **random colour by the game itself** on creation
+(no two are alike). The colour is off-default and carries no `dye_item`, so a
+naive detector mis-flags every one as a rare OG exotic and floods the feed.
+Confirmed sets:
 
-- never appear in the live feed,
-- sink to the bottom of the findings list,
-- are still viewable under the **Random-dyed (Satin)** filter.
+| Item | Slot |
+| --- | --- |
+| Velvet Top Hat | helmet |
+| Cashmere Jacket | chestplate |
+| Satin Trousers | leggings |
+| Oxford Shoes | boots |
 
-Meanwhile genuine exotics float to the top by priority: **PURE/TRUE_BLACK
-(100) > learned-default OG (80) > unconfirmed OG (50) > … > random_dyed (5)**.
+They're detected by item-id substring
+([`random-dyed.json`](../src/data/random-dyed.json) — `SATIN`, `OXFORD`,
+`VELVET`, `CASHMERE`). By default (`DROP_RANDOM_DYED=true`) the engine:
 
-Add a set's id-substring to `random-dyed.json` to downrank it; remove one to
+- **does not store** them at all (they're tagged `random_dyed` with `drop:true`),
+- **never learns their colour** as a piece default (a random roll would
+  otherwise poison the default and make the *next* roll look "off-default" — the
+  original bug),
+- **purges any already-stored** ones (and their poisoned colour defaults) on
+  startup.
+
+Set `DROP_RANDOM_DYED=false` to keep them instead — then they're filed under the
+low-priority `random_dyed` category (hidden from the live feed, bottom of the
+list, viewable via the **Random-dyed (Satin)** filter) rather than dropped.
+
+Genuine exotics float to the top by priority: **PURE/TRUE_BLACK (100) >
+learned-default OG (80) > unconfirmed OG (50) > … > random_dyed (5)**.
+
+Add a set's id-substring to `random-dyed.json` to exclude it; remove one to
 treat it normally.
 
 ---

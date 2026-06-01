@@ -120,6 +120,21 @@ function migrate(d) {
 const now = () => Date.now();
 
 export const repo = {
+  // ---- cleanup ----------------------------------------------------------
+  // Remove stored findings + learned colours for a set of item-id substrings
+  // (e.g. random-dyed sets that were classified before they were excluded).
+  // Returns counts so the caller can log what was cleaned. Case-insensitive.
+  purgeItemPatterns(patterns = []) {
+    const pats = patterns.map((p) => String(p).toUpperCase()).filter(Boolean);
+    if (!pats.length) return { findings: 0, colors: 0 };
+    const d = getDb();
+    const where = pats.map(() => 'UPPER(item_id) LIKE ?').join(' OR ');
+    const args = pats.map((p) => `%${p}%`);
+    const fc = d.prepare(`DELETE FROM findings WHERE ${where}`).run(...args).changes;
+    const cc = d.prepare(`DELETE FROM piece_colors WHERE ${where}`).run(...args).changes;
+    return { findings: fc, colors: cc };
+  },
+
   // ---- accounts ---------------------------------------------------------
   upsertAccount({ uuid, username, source = 'manual', profileCount = 0, note = null }) {
     if (!uuid) return;

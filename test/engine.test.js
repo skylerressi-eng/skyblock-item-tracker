@@ -106,13 +106,22 @@ test('satin: a Satin piece with an off-default colour is random_dyed, NOT exotic
   assert.ok(f.priority < 10, 'random_dyed must rank far below real exotics');
 });
 
-test('random-dyed: all four named cosmetic pieces are downranked, not exotic', () => {
+test('random-dyed: all four named cosmetic pieces are downranked + dropped', () => {
   // Velvet Top Hat, Cashmere Jacket, Satin Trousers, Oxford Shoes
   for (const id of ['VELVET_TOP_HAT', 'CASHMERE_JACKET', 'SATIN_TROUSERS', 'OXFORD_SHOES']) {
     const f = classifyExotic({ itemId: id, hex: '112233', extra: {} }, ctx());
     assert.equal(f.category, 'random_dyed', `${id} should be random_dyed`);
     assert.ok(f.priority < 10, `${id} must rank below real exotics`);
+    assert.equal(f.drop, true, `${id} should be flagged drop (not stored)`);
   }
+});
+
+test('random-dyed: a learned default does NOT rescue an Oxford as exotic', () => {
+  // Even with a (poisoned) learned default, an Oxford must stay random_dyed —
+  // this is the exact bug from the screenshot.
+  const f = classifyExotic({ itemId: 'OXFORD_SHOES', hex: '4a5a35', extra: {} }, ctx({ OXFORD_SHOES: '4ad497' }));
+  assert.equal(f.category, 'random_dyed');
+  assert.equal(f.drop, true);
 });
 
 test('priority: genuine exotics outrank random_dyed; PURE outranks unconfirmed', () => {

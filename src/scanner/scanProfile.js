@@ -6,6 +6,7 @@ import { getProfile, collectItemsFromProfile } from '../clients/skycrypt.js';
 import { decodeInventory } from '../items/nbt.js';
 import { normalizeNbtItem, normalizeSkycryptItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
+import { isRandomDyed } from '../items/data.js';
 import { makeCtx, toFinding } from './context.js';
 
 // Recursively find inventory blobs shaped { type, data:"<base64>" }, tagging
@@ -101,16 +102,21 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   const inactiveDays = lastSave ? Math.floor((Date.now() - lastSave) / 86_400_000) : null;
   const dormant = inactiveDays != null && inactiveDays >= config.crawler.dormantDays;
 
-  // Pass 1: classify against pre-scan learned defaults.
+  // Pass 1: classify against pre-scan learned defaults. Skip dropped fragments
+  // (random-dyed sets like Satin/Oxford — they aren't real exotics).
   const findings = [];
   for (const it of items) {
     for (const fr of classifyItem(it, ctx)) {
+      if (fr.drop && config.dropRandomDyed) continue;
       findings.push(toFinding(fr, it, { uuid, username, source }));
     }
   }
-  // Pass 2: learn default colours from undyed leather pieces.
+  // Pass 2: learn default colours from undyed leather pieces — but NEVER from
+  // random-dyed sets, whose colours are meaningless and would poison defaults.
   for (const it of items) {
-    if (it.hex && !(it.extra && it.extra.dye_item)) ctx.recordPieceColor(it.itemId, it.hex);
+    if (it.hex && !(it.extra && it.extra.dye_item) && !isRandomDyed(it.itemId)) {
+      ctx.recordPieceColor(it.itemId, it.hex);
+    }
   }
 
   repo.upsertAccount({

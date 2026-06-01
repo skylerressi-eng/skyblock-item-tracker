@@ -87,17 +87,19 @@ export function classifyExotic(item, { getDefaultHex } = {}) {
   const known = matchKnownDye(hex);
   if (known) return null;
 
-  // 5. Game-random-dyed set (e.g. Satin)? Off-default, but the colour is just a
-  // random roll — NOT a genuine exotic. File it low-priority so it never floods
-  // the feed above real exotics.
+  // 5. Game-random-dyed set (e.g. Satin, Oxford, Velvet, Cashmere)? The colour
+  // is just a random roll — NOT a genuine exotic. Tag it 'random_dyed' and set
+  // drop:true so callers can skip storing it (and never learn its colour as a
+  // "default", which would otherwise make the next random roll look off-default).
   if (isRandomDyed(item.itemId)) {
     return {
       category: 'random_dyed',
       subcategory: 'RANDOM',
       hex,
       confidence: 'low',
-      reason: 'Game-randomised colour (e.g. Satin) — not a custom/OG exotic',
+      reason: 'Game-randomised colour (e.g. Satin/Oxford) — not a custom/OG exotic',
       priority: 5,
+      drop: true,
     };
   }
 

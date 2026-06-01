@@ -1,7 +1,8 @@
 import path from 'node:path';
 import express from 'express';
 import { config, ROOT } from './config.js';
-import { getDb } from './db/index.js';
+import { getDb, repo } from './db/index.js';
+import { RANDOM_DYED_PATTERNS } from './items/data.js';
 import { scanRouter } from './routes/scan.js';
 import { findingsRouter } from './routes/findings.js';
 import { pricesRouter } from './routes/prices.js';
@@ -12,6 +13,15 @@ import { startAhWorker } from './scanner/ahWorker.js';
 import { startCrawler } from './scanner/crawler.js';
 
 getDb(); // initialize schema before serving
+
+// One-time cleanup: purge any findings/learned-colours for random-dyed sets
+// (Satin/Oxford/Velvet/Cashmere) that were stored before they were excluded.
+if (config.dropRandomDyed) {
+  const purged = repo.purgeItemPatterns(RANDOM_DYED_PATTERNS);
+  if (purged.findings || purged.colors) {
+    console.log(`[cleanup] purged ${purged.findings} random-dyed finding(s) and ${purged.colors} poisoned colour default(s)`);
+  }
+}
 
 const app = express();
 app.use(express.json());

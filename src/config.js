@@ -31,6 +31,13 @@ export const config = {
   // "default" colour. Until then, off-colour pieces are flagged low-confidence.
   pieceColorMinSamples: Number(process.env.PIECE_COLOR_MIN_SAMPLES || 4),
 
+  // Random-dyed cosmetic sets (Satin/Oxford/Velvet/Cashmere — see
+  // data/random-dyed.json) get a NEW random colour from the game, so they are
+  // never real exotics. With this on (default), they are NOT stored at all and
+  // existing ones are purged on startup. Set DROP_RANDOM_DYED=false to keep them
+  // (filed under the low-priority 'random_dyed' category instead).
+  dropRandomDyed: bool(process.env.DROP_RANDOM_DYED, true),
+
   // Endpoints
   hypixelBase: 'https://api.hypixel.net',
   coflnetBase: 'https://sky.coflnet.com/api',
