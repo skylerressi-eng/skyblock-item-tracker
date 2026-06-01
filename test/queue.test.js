@@ -104,3 +104,30 @@ test('getFinding + findingsByHex round-trip', () => {
   assert.ok(repo.findingsByHex('00ff00').some((r) => r.item_uuid === 'g-1'));
   assert.equal(repo.getFinding(999999), null);
 });
+
+test('search: by exact colour, by item, and by state (enchanted/clean/reforged)', () => {
+  repo.insertFinding({ item_uuid: 's-red', item_id: 'WISE_DRAGON_CHESTPLATE', item_name: 'Wise Chest', category: 'exotic', subcategory: 'PURE', hex: 'ff0000', enchanted: 1, source: 'test' });
+  repo.insertFinding({ item_uuid: 's-blue', item_id: 'STRONG_DRAGON_BOOTS', item_name: 'Strong Boots', category: 'exotic', subcategory: 'OG_DYED', hex: '0000ff', reforge: 'fierce', source: 'test' });
+  repo.insertFinding({ item_uuid: 's-clean', item_id: 'HYPERION', item_name: 'Hyperion', category: 'game_breaker', subcategory: 'WEAPON', hex: null, source: 'test' });
+
+  // colour search is exact (and tolerant of '#')
+  const red = repo.queryFindings({ color: '#FF0000' });
+  assert.ok(red.some((r) => r.item_uuid === 's-red'));
+  assert.ok(!red.some((r) => r.item_uuid === 's-blue'));
+
+  // general colour-NAME search: "blue" matches the bluish piece, not the red one
+  const blue = repo.queryFindings({ color: 'blue' });
+  assert.ok(blue.some((r) => r.item_uuid === 's-blue'), 'blue name matches #0000ff');
+  assert.ok(!blue.some((r) => r.item_uuid === 's-red'));
+
+  // item search matches id or name
+  assert.ok(repo.queryFindings({ item: 'dragon' }).length >= 2);
+  assert.ok(repo.queryFindings({ item: 'HYPERION' }).some((r) => r.item_uuid === 's-clean'));
+
+  // state filters
+  assert.ok(repo.queryFindings({ state: 'enchanted' }).some((r) => r.item_uuid === 's-red'));
+  assert.ok(repo.queryFindings({ state: 'reforged' }).some((r) => r.item_uuid === 's-blue'));
+  const clean = repo.queryFindings({ state: 'clean' });
+  assert.ok(clean.some((r) => r.item_uuid === 's-clean'));
+  assert.ok(!clean.some((r) => r.item_uuid === 's-red'), 'enchanted item is not clean');
+});

@@ -1,0 +1,15 @@
+{
+  "_note": "ANIMATED armour sets whose colour is a live animation frame, NOT a dye. While worn they cycle through a fixed, published list of hex frames, so EVERY observed colour is just a frame — never a real exotic. A piece whose item-id matches a pattern here is excluded from exotic detection entirely (tagged 'animated', dropped like random-dyed). If `frames` is non-empty we also defensively exclude those exact hexes on ANY item (covers mis-typed ids). Hex lowercase, no '#'. Source: Hypixel SkyBlock Wiki (Great Spook Armor colour cycle).",
+  "sets": [
+    {
+      "idPatterns": ["GREAT_SPOOK", "GREATER_SPOOK"],
+      "label": "Great/Greater Spook (animated purple→black cycle)",
+      "frames": [
+        "9e00b2", "9700aa", "9000a3", "89009b", "830093", "7c008b",
+        "750084", "6e007c", "670074", "60006c", "590065", "52005d",
+        "4c0055", "45004d", "3e0046", "37003e", "300036", "29002e",
+        "220027", "1b001f", "150017", "0e000f", "070008", "000000"
+      ]
+    }
+  ]
+}

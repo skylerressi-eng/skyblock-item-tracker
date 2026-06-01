@@ -2,7 +2,7 @@ import path from 'node:path';
 import express from 'express';
 import { config, ROOT } from './config.js';
 import { getDb, repo } from './db/index.js';
-import { RANDOM_DYED_PATTERNS } from './items/data.js';
+import { RANDOM_DYED_PATTERNS, ANIMATED_PATTERNS, ANIMATED_DISTINCTIVE_FRAMES } from './items/data.js';
 import { scanRouter } from './routes/scan.js';
 import { findingsRouter } from './routes/findings.js';
 import { pricesRouter } from './routes/prices.js';
@@ -14,12 +14,21 @@ import { startCrawler } from './scanner/crawler.js';
 
 getDb(); // initialize schema before serving
 
-// One-time cleanup: purge any findings/learned-colours for random-dyed sets
-// (Satin/Oxford/Velvet/Cashmere) that were stored before they were excluded.
+// One-time cleanup of pre-classified false positives:
+//  - random-dyed sets (Satin/Oxford/Velvet/Cashmere)
+//  - animated sets (Great/Greater Spook) by id AND by exact animation-frame hex
+//    (catches frames mis-tagged PURE #000000 / OG_DYED #830093 on any id).
 if (config.dropRandomDyed) {
-  const purged = repo.purgeItemPatterns(RANDOM_DYED_PATTERNS);
-  if (purged.findings || purged.colors) {
-    console.log(`[cleanup] purged ${purged.findings} random-dyed finding(s) and ${purged.colors} poisoned colour default(s)`);
+  const rd = repo.purgeItemPatterns(RANDOM_DYED_PATTERNS);
+  // Spook by id (covers ALL its frames incl. #000000 on Spook pieces), plus
+  // distinctive (non-pure) frame hexes on any id. Pure #000000 on a NON-Spook
+  // piece is left alone — that's a legitimate True-Black exotic.
+  const an = repo.purgeItemPatterns(ANIMATED_PATTERNS);
+  const frames = repo.purgeFindingsByHex([...ANIMATED_DISTINCTIVE_FRAMES]);
+  const findings = rd.findings + an.findings + frames;
+  const colors = rd.colors + an.colors;
+  if (findings || colors) {
+    console.log(`[cleanup] purged ${findings} false-positive finding(s) (random-dyed + animated) and ${colors} poisoned colour default(s)`);
   }
 }
 

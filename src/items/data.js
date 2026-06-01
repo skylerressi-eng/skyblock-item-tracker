@@ -9,6 +9,7 @@ export const families = read('exotic-families.json');      // exotic origin seed
 export const knownDyes = read('known-dyes.json');          // Crystal/Fairy = NOT exotic
 export const defaultColors = read('default-colors.json');  // preloaded factory colours
 export const randomDyed = read('random-dyed.json');        // game-random-dyed sets (Satin…)
+export const animatedSets = read('animated-sets.json');    // animated colour-cycle sets (Great Spook)
 export const dyeColors = read('dye-colors.json');
 export const rareItemsRaw = read('rare-items.json');
 
@@ -28,6 +29,36 @@ export function isRandomDyed(itemId) {
   if (!itemId) return false;
   const id = String(itemId).toUpperCase();
   return RANDOM_DYED_PATTERNS.some((p) => id.includes(p));
+}
+
+// Animated sets: id-substring patterns + the set of all known frame hexes.
+// PURE_COLORS are colours (like #000000) that are ALSO legitimate exotics, so a
+// frame-hex match on them must NOT alone mark an item animated — otherwise we'd
+// wrongly exclude real True-Black pieces. Those require an id-pattern match.
+const ANIMATED_PATTERNS = [];
+const ANIMATED_FRAMES = new Set();
+const PURE_COLORS = new Set([
+  '000000', 'ffffff', 'ff0000', '00ff00', '0000ff', 'ffff00', '00ffff', 'ff00ff',
+]);
+for (const s of animatedSets.sets || []) {
+  for (const p of s.idPatterns || []) ANIMATED_PATTERNS.push(String(p).toUpperCase());
+  for (const h of s.frames || []) ANIMATED_FRAMES.add(String(h).toLowerCase().replace(/^#/, ''));
+}
+// Distinctive frames = frames that aren't also a plain pure colour. Matching one
+// of these on any id is a safe animated signal; pure-colour frames are not.
+const ANIMATED_DISTINCTIVE_FRAMES = new Set([...ANIMATED_FRAMES].filter((h) => !PURE_COLORS.has(h)));
+export { ANIMATED_PATTERNS, ANIMATED_FRAMES, ANIMATED_DISTINCTIVE_FRAMES };
+
+// True if a piece belongs to an animated colour-cycle set (e.g. Great Spook).
+//  - id matches an animated set pattern -> always animated (any frame, incl. pure)
+//  - otherwise, a DISTINCTIVE (non-pure) frame hex also counts, to catch
+//    mis-typed ids — but a bare pure colour like #000000 does NOT, so genuine
+//    True-Black exotics on normal pieces are preserved.
+export function isAnimated(itemId, hex = null) {
+  const id = String(itemId || '').toUpperCase();
+  if (id && ANIMATED_PATTERNS.some((p) => id.includes(p))) return true;
+  if (hex && ANIMATED_DISTINCTIVE_FRAMES.has(String(hex).toLowerCase().replace(/^#/, ''))) return true;
+  return false;
 }
 
 // Build a Map<itemId, curatedEntry> from both curated lists.

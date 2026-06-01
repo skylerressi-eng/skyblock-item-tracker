@@ -1,5 +1,5 @@
 import { normHex, dist } from './colors.js';
-import { families, knownDyes, preloadedDefaultHex, isRandomDyed } from './data.js';
+import { families, knownDyes, preloadedDefaultHex, isRandomDyed, isAnimated } from './data.js';
 
 // --- What counts as exotic? -------------------------------------------------
 // An exotic is a colourable armour piece whose colour CANNOT be obtained today:
@@ -75,6 +75,21 @@ export function classifyExotic(item, { getDefaultHex } = {}) {
 
   // 1. Modern dye-system pieces are never exotic.
   if (item.extra && item.extra.dye_item) return null;
+
+  // 1b. Animated colour-cycle sets (e.g. Great/Greater Spook) show a live
+  // animation frame, never a dye — every frame (incl. #000000) is a false
+  // positive. Drop them so they aren't stored or learned from.
+  if (isAnimated(item.itemId, hex)) {
+    return {
+      category: 'animated',
+      subcategory: 'ANIMATED',
+      hex,
+      confidence: 'low',
+      reason: 'Animated colour-cycle set (e.g. Great Spook) — colour is an animation frame, not a dye',
+      priority: 1,
+      drop: true,
+    };
+  }
 
   // 2. Resolve this piece's default: empirically-learned wins, else preloaded.
   const learned = getDefaultHex ? getDefaultHex(item.itemId) : null;

@@ -51,7 +51,13 @@
       <div class="filters">
         <div id="cat-filters" class="chips"></div>
         <div class="row">
-          <input id="find-search" type="text" placeholder="search item / player / hex…" />
+          <input id="find-search" type="text" placeholder="search anything (item / player / hex)…" />
+          <select id="state-filter" title="Filter by item state">
+            <option value="">any state</option>
+            <option value="clean">clean (no enchants/reforge)</option>
+            <option value="enchanted">enchanted</option>
+            <option value="reforged">reforged</option>
+          </select>
           <select id="conf-filter">
             <option value="">any confidence</option>
             <option value="high">high only</option>
@@ -64,6 +70,12 @@
             <option value="sample">sample data</option>
           </select>
         </div>
+        <div class="row">
+          <input id="item-search" type="text" placeholder="search item only (e.g. HYPERION, Dragon)…" />
+          <input id="color-search" type="text" placeholder="colour: name (blue) or hex (#ff0000)…" />
+          <span id="color-swatch" class="search-swatch" title="colour preview"></span>
+        </div>
+        <div id="color-chips" class="chips color-chips"></div>
       </div>
       <div id="findings" class="grid"></div>
       <div class="center"><button id="load-more" class="ghost" hidden>Load more</button></div>

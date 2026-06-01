@@ -58,6 +58,10 @@ export function normalizeNbtItem(raw, location = null) {
 
   const itemId = ea.id || VANILLA_LEATHER_IDS[raw.id] || null;
 
+  const enchantCount = ea.enchantments && typeof ea.enchantments === 'object'
+    ? Object.keys(ea.enchantments).length : 0;
+  const reforge = ea.modifier ? String(ea.modifier) : null;
+
   return {
     itemId,
     name: strip(display.Name) || itemId || 'Unknown',
@@ -67,6 +71,9 @@ export function normalizeNbtItem(raw, location = null) {
     uuid: ea.uuid || null,
     count: raw.Count || 1,
     location,
+    enchanted: enchantCount > 0,
+    enchantCount,
+    reforge,
     extra: ea,
     lore: Array.isArray(display.Lore) ? display.Lore.map(strip) : [],
   };
@@ -91,6 +98,10 @@ export function normalizeSkycryptItem(raw, location = null) {
   if (raw.color) hex = String(raw.color).toLowerCase().replace(/^#/, '');
   else if (typeof raw.colour === 'number') hex = hexFromInt(raw.colour);
 
+  const enchantCount = ea.enchantments && typeof ea.enchantments === 'object'
+    ? Object.keys(ea.enchantments).length : 0;
+  const reforge = ea.modifier ? String(ea.modifier) : null;
+
   return {
     itemId,
     name: strip(raw.display_name || raw.name || itemId || 'Unknown'),
@@ -100,6 +111,9 @@ export function normalizeSkycryptItem(raw, location = null) {
     uuid: ea.uuid || raw.uuid || null,
     count: raw.Count || raw.count || 1,
     location,
+    enchanted: enchantCount > 0,
+    enchantCount,
+    reforge,
     extra: ea,
     lore: Array.isArray(raw.lore) ? raw.lore.map(strip) : [],
   };

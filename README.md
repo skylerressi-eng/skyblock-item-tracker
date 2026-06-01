@@ -161,7 +161,7 @@ friends-of-friends.
 | Method | Route | Description |
 | --- | --- | --- |
 | `POST` | `/api/scan/:username` | Scan a player now, classify items, store findings |
-| `GET` | `/api/findings` | Browse findings. Filters: `category, subcategory, confidence, source, q, username, since, limit, offset` (`since`=epoch ms powers live updates) |
+| `GET` | `/api/findings` | Browse/search findings. Filters: `category, subcategory, confidence, source, q, username, since, item, color, state, limit, offset`. `color` = exact hex **or** general name (`blue`, `purple`…); `state` = `enchanted｜clean｜reforged`; `since`=epoch ms (live updates) |
 | `GET` | `/api/findings/:id` | Detail view: the finding + base (non-dyed) item price/history + colour population |
 | `GET` | `/api/findings/by-hex/:hex` | Every finding sharing a colour + counts by item and owner |
 | `GET` | `/api/crawl` | Crawler + queue status, recent activity |

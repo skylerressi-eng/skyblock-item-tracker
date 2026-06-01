@@ -77,7 +77,7 @@ const CATEGORIES = [
   { key: 'random_dyed', label: 'Random-dyed (Satin)' },
 ];
 
-const state = { category: '', q: '', confidence: '', source: '', offset: 0 };
+const state = { category: '', q: '', confidence: '', source: '', item: '', color: '', itemState: '', offset: 0 };
 
 // ---------- stats + engine bar ----------
 async function loadStats() {
@@ -184,6 +184,9 @@ function cardFor(f, flash = false) {
     : `<div class="swatch" style="background:linear-gradient(135deg,#2a2f3d,#3a4050)"></div>`;
   const price = f.price ? `${fmt(f.price)} coins` : '';
   const confBadge = f.confidence === 'low' ? `<span class="badge conf-low">low conf</span>` : '';
+  const stateBadge = f.reforge
+    ? `<span class="badge state" title="Reforge: ${esc(f.reforge)}">✦ ${esc(f.reforge)}</span>`
+    : (f.enchanted ? '<span class="badge state">✦ enchanted</span>' : '<span class="badge state">clean</span>');
   return `
     <div class="card clickable${flash ? ' flash' : ''}" data-id="${esc(f.id)}" title="Click for details, price &amp; colour population">
       <div class="card-head">
@@ -196,6 +199,7 @@ function cardFor(f, flash = false) {
       <div class="badges">
         <span class="badge ${esc(f.category)}">${esc((f.subcategory || f.category).replace('_', ' '))}</span>
         ${f.rarity ? `<span class="badge">${esc(f.rarity.replace('_', ' '))}</span>` : ''}
+        ${stateBadge}
         ${confBadge}
       </div>
       ${f.reason ? `<div class="reason">${esc(f.reason)}</div>` : ''}
@@ -219,13 +223,16 @@ async function loadFindings(append = false) {
   if (state.q) p.set('q', state.q);
   if (state.confidence) p.set('confidence', state.confidence);
   if (state.source) p.set('source', state.source);
+  if (state.item) p.set('item', state.item);
+  if (state.color) p.set('color', state.color.replace(/^#/, ''));
+  if (state.itemState) p.set('state', state.itemState);
   p.set('limit', PAGE);
   p.set('offset', state.offset);
   const data = await (await fetch(`/api/findings?${p}`)).json();
   const html = (data.findings || []).map(cardFor).join('');
   const grid = $('#findings');
   if (append) grid.insertAdjacentHTML('beforeend', html);
-  else grid.innerHTML = html || `<div class="empty">No findings match. Scan a player above to populate the database.</div>`;
+  else grid.innerHTML = html || `<div class="empty">No findings match these filters.</div>`;
   $('#load-more').hidden = (data.findings || []).length < PAGE;
 }
 
@@ -234,11 +241,52 @@ function resetAndLoadFindings() {
   loadFindings(false);
 }
 
-$('#find-search').addEventListener('input', (e) => {
+const debounce = (fn, ms = 250) => {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+};
+
+$('#find-search').addEventListener('input', debounce((e) => {
   state.q = e.target.value.trim();
-  clearTimeout(window.__t);
-  window.__t = setTimeout(resetAndLoadFindings, 250);
-});
+  resetAndLoadFindings();
+}));
+$('#item-search').addEventListener('input', debounce((e) => {
+  state.item = e.target.value.trim();
+  resetAndLoadFindings();
+}));
+// Named colours -> a representative swatch for the preview box + quick chips.
+const NAMED_COLORS = {
+  red: 'ff0000', orange: 'ff9000', brown: '7a4a1e', yellow: 'ffe000', green: '22c032',
+  cyan: '22d3d3', blue: '2a6cff', purple: '9b30ff', pink: 'ff5fd0',
+  black: '111111', white: 'f5f5f5', gray: '8a8a8a',
+};
+function colorPreview(v) {
+  const raw = v.trim().toLowerCase().replace(/^#/, '');
+  if (/^[0-9a-f]{6}$/.test(raw)) return `#${raw}`;
+  if (/^[0-9a-f]{3}$/.test(raw)) return `#${raw.split('').map((c) => c + c).join('')}`;
+  const named = NAMED_COLORS[raw] || NAMED_COLORS[({ grey: 'gray', magenta: 'pink', violet: 'purple', aqua: 'cyan', teal: 'cyan', gold: 'yellow' })[raw]];
+  return named ? `#${named}` : 'transparent';
+}
+function applyColorSearch(v) {
+  state.color = v;
+  $('#color-search').value = v;
+  $('#color-swatch').style.background = colorPreview(v);
+  resetAndLoadFindings();
+}
+$('#color-search').addEventListener('input', debounce((e) => applyColorSearch(e.target.value.trim())));
+
+// Quick general-colour chips.
+$('#color-chips').innerHTML =
+  `<span class="chip color-chip" data-color="">any</span>` +
+  Object.keys(NAMED_COLORS).map((n) =>
+    `<span class="chip color-chip" data-color="${n}"><span class="cc-dot" style="background:#${NAMED_COLORS[n]}"></span>${n}</span>`).join('');
+document.querySelectorAll('#color-chips .color-chip').forEach((el) =>
+  el.addEventListener('click', () => {
+    document.querySelectorAll('#color-chips .color-chip').forEach((c) => c.classList.remove('active'));
+    el.classList.add('active');
+    applyColorSearch(el.dataset.color);
+  }));
+$('#state-filter').addEventListener('change', (e) => { state.itemState = e.target.value; resetAndLoadFindings(); });
 $('#conf-filter').addEventListener('change', (e) => { state.confidence = e.target.value; resetAndLoadFindings(); });
 $('#source-filter').addEventListener('change', (e) => { state.source = e.target.value; resetAndLoadFindings(); });
 $('#load-more').addEventListener('click', () => { state.offset += PAGE; loadFindings(true); });

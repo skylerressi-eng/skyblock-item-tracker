@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { hexFromInt, normHex, dist } from '../src/items/colors.js';
+import { hexFromInt, normHex, dist, colorName, normColorName } from '../src/items/colors.js';
 import { classifyFamily, classifyExotic, matchKnownDye } from '../src/items/exotics.js';
 import { classifyRarity, classifyCurated } from '../src/items/rarity.js';
 import { classifyItem } from '../src/items/classify.js';
@@ -24,6 +24,20 @@ test('colors: hex/int conversions and distance', () => {
   assert.equal(normHex(16777215), 'ffffff');
   assert.equal(dist('000000', '000000'), 0);
   assert.ok(dist('000000', 'ffffff') > 440);
+});
+
+test('colors: general colour naming buckets hues correctly', () => {
+  assert.equal(colorName('ff0000'), 'red');
+  assert.equal(colorName('2a6cff'), 'blue');
+  assert.equal(colorName('9b30ff'), 'purple');
+  assert.equal(colorName('22c032'), 'green');
+  assert.equal(colorName('ff9000'), 'orange');
+  assert.equal(colorName('000000'), 'black');
+  assert.equal(colorName('f5f5f5'), 'white');
+  assert.equal(colorName('8a8a8a'), 'gray');
+  // aliases normalise
+  assert.equal(normColorName('grey'), 'gray');
+  assert.equal(normColorName('violet'), 'purple');
 });
 
 test('exotics: pure colours land in the PURE family exactly', () => {
@@ -130,6 +144,29 @@ test('priority: genuine exotics outrank random_dyed; PURE outranks unconfirmed',
   const satin = classifyExotic({ itemId: 'SATIN_TROUSERS', hex: '654321', extra: {} }, ctx());
   assert.ok(pure.priority > og.priority, 'exact PURE family ranks above off-default OG');
   assert.ok(og.priority > satin.priority, 'real OG exotic ranks above random-dyed satin');
+});
+
+test('animated: Great Spook is never exotic, on any frame (incl. #000000)', () => {
+  // The famous false-positive cluster: every frame of the purple->black cycle.
+  for (const hex of ['830093', '000000', '4c0055', '070008']) {
+    const f = classifyExotic({ itemId: 'GREAT_SPOOK_CHESTPLATE', hex, extra: {} }, ctx());
+    assert.equal(f.category, 'animated', `#${hex} on Great Spook must be animated`);
+    assert.equal(f.drop, true);
+  }
+  // Greater Spook variant too.
+  assert.equal(classifyExotic({ itemId: 'GREATER_SPOOK_HELMET', hex: '590065', extra: {} }, ctx()).category, 'animated');
+});
+
+test('animated: a known frame hex is excluded even on an unexpected id', () => {
+  // #830093 is a published Spook frame; defensively treat it as animated.
+  const f = classifyExotic({ itemId: 'SOME_LEATHER_HELMET', hex: '830093', extra: {} }, ctx());
+  assert.equal(f.category, 'animated');
+});
+
+test('animated: a genuine exotic colour on a non-animated piece still flags', () => {
+  // #830094 (one off a frame) on a normal piece is still a real exotic.
+  const f = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '830094', extra: {} }, ctx());
+  assert.equal(f.category, 'exotic');
 });
 
 test('rarity: configured tiers flag, common LEGENDARY does not', () => {

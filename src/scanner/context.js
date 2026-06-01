@@ -38,6 +38,8 @@ export function toFinding(fr, it, base = {}) {
     confidence: fr.confidence || null,
     reason: fr.reason || null,
     priority,
+    enchanted: it.enchanted ? 1 : 0,
+    reforge: it.reforge || null,
     account_uuid: base.uuid || null,
     username: base.username || null,
     profile_id: it.profile_id || base.profile_id || null,

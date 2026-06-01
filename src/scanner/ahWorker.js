@@ -4,7 +4,7 @@ import { getAuctionsPage } from '../clients/hypixel.js';
 import { decodeSingleItem } from '../items/nbt.js';
 import { normalizeNbtItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
-import { isRandomDyed } from '../items/data.js';
+import { isRandomDyed, isAnimated } from '../items/data.js';
 import { makeCtx, toFinding } from './context.js';
 import { enqueueSeller } from './crawler.js';
 
@@ -58,7 +58,8 @@ export async function runCycle() {
 
       // Never learn colours from random-dyed sets — their colour is a random
       // roll and would poison the learned default for that piece.
-      if (it.hex && !(it.extra && it.extra.dye_item) && !isRandomDyed(it.itemId)) {
+      if (it.hex && !(it.extra && it.extra.dye_item)
+          && !isRandomDyed(it.itemId) && !isAnimated(it.itemId, it.hex)) {
         ctx.recordPieceColor(it.itemId, it.hex);
       }
       if (auc.auctioneer) {

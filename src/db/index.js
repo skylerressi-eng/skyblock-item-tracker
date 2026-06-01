@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { config } from '../config.js';
+import { colorName, normColorName } from '../items/colors.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS accounts (
@@ -24,9 +25,12 @@ CREATE TABLE IF NOT EXISTS findings (
   category     TEXT,
   subcategory  TEXT,
   hex          TEXT,
+  color_name   TEXT,
   confidence   TEXT,
   reason       TEXT,
   priority     INTEGER DEFAULT 30,
+  enchanted    INTEGER DEFAULT 0,
+  reforge      TEXT,
   account_uuid TEXT,
   username     TEXT,
   profile_id   TEXT,
@@ -114,7 +118,32 @@ function migrate(d) {
   if (!cols.includes('priority')) {
     d.exec('ALTER TABLE findings ADD COLUMN priority INTEGER DEFAULT 30');
   }
+  if (!cols.includes('enchanted')) {
+    d.exec('ALTER TABLE findings ADD COLUMN enchanted INTEGER DEFAULT 0');
+  }
+  if (!cols.includes('reforge')) {
+    d.exec('ALTER TABLE findings ADD COLUMN reforge TEXT');
+  }
+  if (!cols.includes('color_name')) {
+    d.exec('ALTER TABLE findings ADD COLUMN color_name TEXT');
+    backfillColorNames(d);
+  }
   d.exec('CREATE INDEX IF NOT EXISTS idx_findings_rank ON findings(priority DESC, found_at DESC)');
+  d.exec('CREATE INDEX IF NOT EXISTS idx_findings_colorname ON findings(color_name)');
+}
+
+// Populate color_name for existing rows that have a hex (after the column was
+// added). Cheap one-time pass over distinct hexes.
+function backfillColorNames(d) {
+  const rows = d.prepare('SELECT DISTINCT hex FROM findings WHERE hex IS NOT NULL').all();
+  const upd = d.prepare('UPDATE findings SET color_name = ? WHERE hex = ?');
+  const tx = d.transaction(() => {
+    for (const r of rows) {
+      const name = colorName(r.hex);
+      if (name) upd.run(name, r.hex);
+    }
+  });
+  tx();
 }
 
 const now = () => Date.now();
@@ -133,6 +162,19 @@ export const repo = {
     const fc = d.prepare(`DELETE FROM findings WHERE ${where}`).run(...args).changes;
     const cc = d.prepare(`DELETE FROM piece_colors WHERE ${where}`).run(...args).changes;
     return { findings: fc, colors: cc };
+  },
+
+  // Remove findings whose hex exactly matches one of the given colours (used to
+  // clean up animation frames like Great Spook's, which can sit on any id —
+  // e.g. the #000000 ones tagged PURE). Only the 'exotic'/'animated' families
+  // are touched so a legit special_rarity/curated item is never collateral.
+  purgeFindingsByHex(hexes = []) {
+    const hs = hexes.map((h) => String(h).toLowerCase().replace(/^#/, '')).filter(Boolean);
+    if (!hs.length) return 0;
+    const placeholders = hs.map(() => '?').join(',');
+    return getDb()
+      .prepare(`DELETE FROM findings WHERE LOWER(hex) IN (${placeholders}) AND category IN ('exotic','animated','random_dyed')`)
+      .run(...hs).changes;
   },
 
   // ---- accounts ---------------------------------------------------------
@@ -161,15 +203,17 @@ export const repo = {
       .prepare(
         `INSERT INTO findings
            (dedup_key, item_uuid, item_id, item_name, rarity, category, subcategory,
-            hex, confidence, reason, priority, account_uuid, username, profile_id, profile_name,
-            location, source, price, extra, found_at, updated_at)
+            hex, color_name, confidence, reason, priority, enchanted, reforge, account_uuid, username,
+            profile_id, profile_name, location, source, price, extra, found_at, updated_at)
          VALUES
            (@dedup_key, @item_uuid, @item_id, @item_name, @rarity, @category, @subcategory,
-            @hex, @confidence, @reason, @priority, @account_uuid, @username, @profile_id, @profile_name,
-            @location, @source, @price, @extra, @found_at, @updated_at)
+            @hex, @color_name, @confidence, @reason, @priority, @enchanted, @reforge, @account_uuid, @username,
+            @profile_id, @profile_name, @location, @source, @price, @extra, @found_at, @updated_at)
          ON CONFLICT(dedup_key) DO UPDATE SET
            item_name = excluded.item_name, rarity = excluded.rarity, hex = excluded.hex,
+           color_name = excluded.color_name,
            confidence = excluded.confidence, reason = excluded.reason, priority = excluded.priority,
+           enchanted = excluded.enchanted, reforge = excluded.reforge,
            subcategory = excluded.subcategory, account_uuid = excluded.account_uuid,
            username = excluded.username, profile_id = excluded.profile_id,
            profile_name = excluded.profile_name, location = excluded.location,
@@ -185,9 +229,12 @@ export const repo = {
         category: f.category,
         subcategory: f.subcategory || null,
         hex: f.hex || null,
+        color_name: f.hex ? colorName(f.hex) : null,
         confidence: f.confidence || null,
         reason: f.reason || null,
         priority: f.priority ?? 30,
+        enchanted: f.enchanted ? 1 : 0,
+        reforge: f.reforge || null,
         account_uuid: f.account_uuid || null,
         username: f.username || null,
         profile_id: f.profile_id || null,
@@ -204,7 +251,7 @@ export const repo = {
 
   queryFindings({
     category, subcategory, confidence, source, q, username, since,
-    excludeCategory, sort = 'rank', limit = 60, offset = 0,
+    color, item, state, excludeCategory, sort = 'rank', limit = 60, offset = 0,
   } = {}) {
     const where = [];
     const p = {};
@@ -215,6 +262,27 @@ export const repo = {
     if (source) { where.push('source = @source'); p.source = source; }
     if (username) { where.push('username = @username'); p.username = username; }
     if (since) { where.push('found_at > @since'); p.since = Number(since); }
+    // Colour search accepts EITHER an exact hex (e.g. "#ff0000" / "ff0000") OR a
+    // general colour name (e.g. "blue", "purple", "teal").
+    if (color) {
+      const raw = String(color).trim().toLowerCase().replace(/^#/, '');
+      if (/^[0-9a-f]{6}$/.test(raw) || /^[0-9a-f]{3}$/.test(raw)) {
+        where.push('LOWER(hex) = @color');
+        p.color = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+      } else {
+        where.push('color_name = @colorName');
+        p.colorName = normColorName(raw);
+      }
+    }
+    // Targeted item search: match against item id or display name.
+    if (item) {
+      where.push('(item_id LIKE @item OR item_name LIKE @item)');
+      p.item = `%${item}%`;
+    }
+    // State filter: enchanted | clean | reforged.
+    if (state === 'enchanted') where.push('enchanted = 1');
+    else if (state === 'clean') where.push('enchanted = 0 AND (reforge IS NULL OR reforge = \'\')');
+    else if (state === 'reforged') where.push('reforge IS NOT NULL AND reforge != \'\'');
     if (q) {
       where.push('(username LIKE @q OR item_name LIKE @q OR item_id LIKE @q OR hex LIKE @q)');
       p.q = `%${q}%`;
