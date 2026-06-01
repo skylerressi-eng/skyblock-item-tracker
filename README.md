@@ -108,6 +108,18 @@ AH sellers ─┤                        │
 - **Friends-of-friends** — with a key, each scanned account's friends are
   enqueued, walking the social graph outward from the seeds.
 
+**Every scan reads the whole account, not just the AH or equipped gear.** With
+a key, a profile scan decodes *every* container — inventory, **ender chest,
+backpacks, personal vault, wardrobe, accessory bags** — so forgotten exotics
+sitting in storage are found too.
+
+**Dormant / quit / banned hunting.** Each scan records the player's `last_save`
+(last login). Accounts inactive for `DORMANT_DAYS` (default 365) are tagged
+**dormant** — exactly where old exotics sit forgotten — and their friend circles
+(same-era collectors) are prioritised in the crawl. (Note: Hypixel's API doesn't
+expose a "banned" flag directly; long-dormant is the detectable proxy, and banned
+accounts typically read as dormant.)
+
 The queue is idempotent (no account is scanned twice within `RESCAN_AFTER_MS`)
 and backlog-capped (`MAX_QUEUE_BACKLOG`) so it can run 24/7.
 

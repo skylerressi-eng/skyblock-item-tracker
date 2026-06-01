@@ -58,9 +58,10 @@ function locationLabel(loc) {
 const CATEGORIES = [
   { key: '', label: 'All' },
   { key: 'exotic', label: 'Exotics' },
-  { key: 'special_rarity', label: 'Special rarity' },
-  { key: 'curated_rare', label: 'Collectors' },
   { key: 'game_breaker', label: 'Game breakers' },
+  { key: 'curated_rare', label: 'Collectors' },
+  { key: 'special_rarity', label: 'Special rarity' },
+  { key: 'random_dyed', label: 'Random-dyed (Satin)' },
 ];
 
 const state = { category: '', q: '', confidence: '', source: '', offset: 0 };
@@ -487,7 +488,11 @@ const live = { since: 0, seen: new Set(), enabled: true, max: 24, timer: null };
 async function pollLive(first = false) {
   if (!live.enabled) return;
   try {
-    const url = first ? '/api/findings?limit=12' : `/api/findings?since=${live.since}&limit=40`;
+    // Live stream is chronological but hides random-dyed (Satin) so genuine
+    // finds aren't buried.
+    const url = first
+      ? '/api/findings?limit=12&sort=recent&excludeCategory=random_dyed'
+      : `/api/findings?since=${live.since}&limit=40&sort=recent&excludeCategory=random_dyed`;
     const data = await (await fetch(url)).json();
     const rows = data.findings || [];
     if (typeof data.latest === 'number') live.since = Math.max(live.since, data.latest);

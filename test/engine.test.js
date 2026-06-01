@@ -29,7 +29,8 @@ test('colors: hex/int conversions and distance', () => {
 test('exotics: pure colours land in the PURE family exactly', () => {
   assert.deepEqual(classifyFamily('000000'), { name: 'PURE', exact: true });
   assert.deepEqual(classifyFamily('ff00ff'), { name: 'PURE', exact: true });
-  assert.equal(classifyFamily('123456').name, 'EXOTIC');
+  // an off-chart colour defaults to the OG_DYED tag (the classic exotic origin)
+  assert.equal(classifyFamily('123456').name, 'OG_DYED');
 });
 
 test('exotics: pure black armour with no dye is a high-confidence exotic', () => {
@@ -95,6 +96,28 @@ test('exotics: pure black on any leather item is a PURE exotic (works on ALL ite
 
 test('exotics: items without a colour are skipped', () => {
   assert.equal(classifyExotic({ itemId: 'HYPERION', hex: null }, ctx()), null);
+});
+
+test('satin: a Satin piece with an off-default colour is random_dyed, NOT exotic', () => {
+  const f = classifyExotic({ itemId: 'SATIN_TROUSERS', hex: '3b7a2c', extra: {} }, ctx());
+  assert.equal(f.category, 'random_dyed');
+  assert.equal(f.subcategory, 'RANDOM');
+  assert.equal(f.confidence, 'low');
+  assert.ok(f.priority < 10, 'random_dyed must rank far below real exotics');
+});
+
+test('satin: substring match catches the whole set (helmet/boots too)', () => {
+  for (const id of ['SATIN_HELMET', 'SATIN_JACKET', 'SATIN_TROUSERS', 'SATIN_SLIPPERS']) {
+    assert.equal(classifyExotic({ itemId: id, hex: '112233', extra: {} }, ctx()).category, 'random_dyed');
+  }
+});
+
+test('priority: genuine exotics outrank random_dyed; PURE outranks unconfirmed', () => {
+  const pure = classifyExotic({ itemId: 'X_HELMET', hex: '000000', extra: {} }, ctx());
+  const og = classifyExotic({ itemId: 'Y_HELMET', hex: '654321', extra: {} }, ctx({ Y_HELMET: 'a06540' }));
+  const satin = classifyExotic({ itemId: 'SATIN_TROUSERS', hex: '654321', extra: {} }, ctx());
+  assert.ok(pure.priority > og.priority, 'exact PURE family ranks above off-default OG');
+  assert.ok(og.priority > satin.priority, 'real OG exotic ranks above random-dyed satin');
 });
 
 test('rarity: configured tiers flag, common LEGENDARY does not', () => {

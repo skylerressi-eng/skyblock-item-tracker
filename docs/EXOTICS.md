@@ -23,7 +23,8 @@ colourable piece
   ├─ has a modern dye_item?            → NOT exotic (modern dye system)
   ├─ colour == its default/factory?    → NOT exotic
   ├─ colour on the Crystal/Fairy chart → NOT exotic (known, was obtainable)
-  └─ otherwise (off-chart colour)      → EXOTIC  ✓
+  ├─ id is a random-dyed set (Satin…)  → random_dyed (downranked, NOT exotic)
+  └─ otherwise (off-chart colour)      → EXOTIC ✓  (tagged OG_DYED by default)
 ```
 
 So exotic detection works on **any colourable item**, not just a hardcoded list.
@@ -41,14 +42,36 @@ So exotic detection works on **any colourable item**, not just a hardcoded list.
 | **GLITCHED** | Colour carried through an armour-upgrade glitch. Open list. |
 
 "Open list" = there's no fixed chart; the engine flags these by them being
-**off-default and not a known dye**, tagged generic `EXOTIC` with *medium*
-confidence (or *high* once the piece's default colour is learned/preloaded).
+**off-default and not a known dye**. Any such unmatched exotic colour is tagged
+**`OG_DYED`** (the classic exotic origin) — *medium* confidence, or *high* once
+the piece's default colour is learned/preloaded.
 
 ### Classic exotic armour sets (community-known)
 Magma (most common, cheapest), Lapis, the Dragon sets (Young, Old, Wise, Strong,
 Unstable, Protector, **Superior** — *not* Holy), Tarantula (helmet/legs),
 Tuxedo (very rare), Bat Person (one known). These are recognised automatically
 when their colour is off-default and off-chart — you don't need them listed.
+
+---
+
+## ⬇ Random-dyed sets (Satin) — downranked, NOT exotic
+
+Some sets (e.g. **Satin**) are dyed a **random colour by the game itself** on
+creation. That colour is off-default and carries no `dye_item`, so a naive
+detector would mis-flag it as a rare OG exotic and flood the feed. These are
+detected by item-id pattern ([`random-dyed.json`](../src/data/random-dyed.json),
+substring match so `SATIN` catches the whole set) and filed under the
+**`random_dyed`** category with the lowest priority. They:
+
+- never appear in the live feed,
+- sink to the bottom of the findings list,
+- are still viewable under the **Random-dyed (Satin)** filter.
+
+Meanwhile genuine exotics float to the top by priority: **PURE/TRUE_BLACK
+(100) > learned-default OG (80) > unconfirmed OG (50) > … > random_dyed (5)**.
+
+Add a set's id-substring to `random-dyed.json` to downrank it; remove one to
+treat it normally.
 
 ---
 

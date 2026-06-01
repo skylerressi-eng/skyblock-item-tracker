@@ -30,10 +30,15 @@ async function gatherFromHypixel(uuid) {
   const profiles = await getProfiles(uuid);
   const items = [];
   let profilesScanned = 0;
+  let lastSave = 0; // most-recent login across this player's profiles (ms epoch)
   for (const p of profiles) {
     const member = p.members && p.members[uuid];
     if (!member) continue;
     profilesScanned++;
+    if (typeof member.last_save === 'number') lastSave = Math.max(lastSave, member.last_save);
+    // findInventoryBlobs recurses the whole member object, so it already covers
+    // EVERY container: main inventory, ender chest, backpacks, personal vault,
+    // wardrobe, equipment, and accessory/other bags — not just equipped gear.
     for (const blob of findInventoryBlobs(member.inventory || member)) {
       let raws;
       try { raws = await decodeInventory(blob.data); } catch { continue; }
@@ -46,7 +51,7 @@ async function gatherFromHypixel(uuid) {
       }
     }
   }
-  return { items, profilesScanned };
+  return { items, profilesScanned, lastSave };
 }
 
 // Gather + normalize items from the keyless SkyCrypt API (fewer items).
@@ -72,12 +77,13 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
 
   let items = [];
   let profilesScanned = 0;
+  let lastSave = 0;
   let mode;
   let warning = null;
 
   if (config.hypixelApiKey) {
     try {
-      ({ items, profilesScanned } = await gatherFromHypixel(uuid));
+      ({ items, profilesScanned, lastSave } = await gatherFromHypixel(uuid));
       mode = 'hypixel';
     } catch (err) {
       // Key present but failed (bad key, throttled, private) — degrade.
@@ -89,6 +95,11 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
     ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
     mode = 'skycrypt';
   }
+
+  // Inactivity signal: how long since this player last logged in. Dormant
+  // accounts (often quit/banned) are exactly where forgotten exotics sit.
+  const inactiveDays = lastSave ? Math.floor((Date.now() - lastSave) / 86_400_000) : null;
+  const dormant = inactiveDays != null && inactiveDays >= config.crawler.dormantDays;
 
   // Pass 1: classify against pre-scan learned defaults.
   const findings = [];
@@ -102,7 +113,10 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
     if (it.hex && !(it.extra && it.extra.dye_item)) ctx.recordPieceColor(it.itemId, it.hex);
   }
 
-  repo.upsertAccount({ uuid, username, source, profileCount: profilesScanned });
+  repo.upsertAccount({
+    uuid, username, source, profileCount: profilesScanned,
+    note: dormant ? `dormant ${inactiveDays}d` : (inactiveDays != null ? `active ${inactiveDays}d ago` : null),
+  });
   let newFindings = 0;
   for (const f of findings) if (repo.insertFinding(f).isNew) newFindings++;
 
@@ -115,6 +129,7 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   return {
     uuid, username, mode, warning,
     profilesScanned, itemsScanned: items.length,
+    inactiveDays, dormant,
     findings, newFindings, friends,
   };
 }

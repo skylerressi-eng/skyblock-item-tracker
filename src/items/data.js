@@ -8,6 +8,7 @@ const read = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 export const families = read('exotic-families.json');      // exotic origin seeds
 export const knownDyes = read('known-dyes.json');          // Crystal/Fairy = NOT exotic
 export const defaultColors = read('default-colors.json');  // preloaded factory colours
+export const randomDyed = read('random-dyed.json');        // game-random-dyed sets (Satin…)
 export const dyeColors = read('dye-colors.json');
 export const rareItemsRaw = read('rare-items.json');
 
@@ -17,6 +18,16 @@ export function preloadedDefaultHex(itemId) {
     return defaultColors[itemId];
   }
   return defaultColors._vanillaLeather || 'a06540';
+}
+
+const RANDOM_DYED_PATTERNS = (randomDyed.patterns || []).map((s) => String(s).toUpperCase());
+
+// True if the item id belongs to a set the GAME dyes randomly (e.g. Satin).
+// Such pieces are NOT genuine exotics — their off-default colour is just a roll.
+export function isRandomDyed(itemId) {
+  if (!itemId) return false;
+  const id = String(itemId).toUpperCase();
+  return RANDOM_DYED_PATTERNS.some((p) => id.includes(p));
 }
 
 // Build a Map<itemId, curatedEntry> from both curated lists.

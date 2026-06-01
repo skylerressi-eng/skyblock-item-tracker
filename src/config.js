@@ -65,5 +65,9 @@ export const config = {
     maxQueueBacklog: Number(process.env.MAX_QUEUE_BACKLOG || 5000),
     // Bootstrap the queue from src/data/seeds.json on first run.
     seedOnStart: bool(process.env.SEED_ON_START, true),
+    // An account that hasn't logged in for this many days is "dormant" —
+    // often quit/banned players whose old exotics are forgotten. We surface
+    // these and prioritise their friend circles (same-era collectors).
+    dormantDays: Number(process.env.DORMANT_DAYS || 365),
   },
 };

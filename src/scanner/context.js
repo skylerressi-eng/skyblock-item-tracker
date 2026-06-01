@@ -14,8 +14,19 @@ export function makeCtx() {
   };
 }
 
+// Default ranking per category (higher floats to the top). A fragment's own
+// `priority` wins when set (e.g. exotic sub-tiers, random_dyed downrank).
+const CATEGORY_PRIORITY = {
+  exotic: 70,
+  game_breaker: 90,
+  curated_rare: 60,
+  special_rarity: 40,
+  random_dyed: 5,
+};
+
 // Merge a classifier fragment + normalized item + scan context into a DB row.
 export function toFinding(fr, it, base = {}) {
+  const priority = fr.priority != null ? fr.priority : (CATEGORY_PRIORITY[fr.category] ?? 30);
   return {
     item_uuid: it.uuid || null,
     item_id: it.itemId || null,
@@ -26,6 +37,7 @@ export function toFinding(fr, it, base = {}) {
     hex: fr.hex || it.hex || null,
     confidence: fr.confidence || null,
     reason: fr.reason || null,
+    priority,
     account_uuid: base.uuid || null,
     username: base.username || null,
     profile_id: it.profile_id || base.profile_id || null,

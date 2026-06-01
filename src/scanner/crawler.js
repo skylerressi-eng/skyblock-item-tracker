@@ -60,26 +60,31 @@ async function processOne(row) {
     stats.findings += res.newFindings;
 
     // Chain friends-of-friends (only populated when a Hypixel key is set).
+    // Dormant/banned players' friend circles are same-era collectors, so scan
+    // them sooner (lower priority number).
     let chained = 0;
+    const dormantBoost = res.dormant ? -30 : 0;
     for (const fuuid of res.friends || []) {
       if (chained >= config.crawler.maxFriendsPerAccount) break;
       if (repo.queuedCount() >= config.crawler.maxQueueBacklog) break;
       if (
         repo.enqueue({
           uuid: fuuid,
-          source: 'friend',
+          source: res.dormant ? 'friend-dormant' : 'friend',
           depth: (row.depth || 0) + 1,
-          priority: 50 + (row.depth || 0) * 10, // closer to a seed = sooner
+          priority: 50 + (row.depth || 0) * 10 + dormantBoost,
         }).added
       ) { chained++; stats.enqueued++; }
     }
 
+    const tag = res.dormant ? ` DORMANT(${res.inactiveDays}d)` : '';
     repo.finishCrawl(row.key, {
       uuid: res.uuid,
       username: res.username,
       status: 'done',
-      message: `${res.newFindings} new finding(s), ${res.itemsScanned} items, +${chained} friends [${res.mode}]`,
+      message: `${res.newFindings} new, ${res.itemsScanned} items, +${chained} friends [${res.mode}]${tag}`,
     });
+    if (res.dormant) stats.dormantFound = (stats.dormantFound || 0) + 1;
     return res.newFindings;
   } catch (err) {
     stats.errors++;

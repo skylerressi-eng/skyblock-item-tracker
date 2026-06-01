@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS findings (
   hex          TEXT,
   confidence   TEXT,
   reason       TEXT,
+  priority     INTEGER DEFAULT 30,
   account_uuid TEXT,
   username     TEXT,
   profile_id   TEXT,
@@ -101,7 +102,19 @@ export function getDb() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+// Tiny additive migrations for DBs created before a column existed. Runs after
+// SCHEMA, and the rank index lives here (not in SCHEMA) so it's only created
+// once the `priority` column is guaranteed to exist on upgraded DBs.
+function migrate(d) {
+  const cols = d.prepare('PRAGMA table_info(findings)').all().map((c) => c.name);
+  if (!cols.includes('priority')) {
+    d.exec('ALTER TABLE findings ADD COLUMN priority INTEGER DEFAULT 30');
+  }
+  d.exec('CREATE INDEX IF NOT EXISTS idx_findings_rank ON findings(priority DESC, found_at DESC)');
 }
 
 const now = () => Date.now();
@@ -133,15 +146,15 @@ export const repo = {
       .prepare(
         `INSERT INTO findings
            (dedup_key, item_uuid, item_id, item_name, rarity, category, subcategory,
-            hex, confidence, reason, account_uuid, username, profile_id, profile_name,
+            hex, confidence, reason, priority, account_uuid, username, profile_id, profile_name,
             location, source, price, extra, found_at, updated_at)
          VALUES
            (@dedup_key, @item_uuid, @item_id, @item_name, @rarity, @category, @subcategory,
-            @hex, @confidence, @reason, @account_uuid, @username, @profile_id, @profile_name,
+            @hex, @confidence, @reason, @priority, @account_uuid, @username, @profile_id, @profile_name,
             @location, @source, @price, @extra, @found_at, @updated_at)
          ON CONFLICT(dedup_key) DO UPDATE SET
            item_name = excluded.item_name, rarity = excluded.rarity, hex = excluded.hex,
-           confidence = excluded.confidence, reason = excluded.reason,
+           confidence = excluded.confidence, reason = excluded.reason, priority = excluded.priority,
            subcategory = excluded.subcategory, account_uuid = excluded.account_uuid,
            username = excluded.username, profile_id = excluded.profile_id,
            profile_name = excluded.profile_name, location = excluded.location,
@@ -159,6 +172,7 @@ export const repo = {
         hex: f.hex || null,
         confidence: f.confidence || null,
         reason: f.reason || null,
+        priority: f.priority ?? 30,
         account_uuid: f.account_uuid || null,
         username: f.username || null,
         profile_id: f.profile_id || null,
@@ -174,11 +188,13 @@ export const repo = {
   },
 
   queryFindings({
-    category, subcategory, confidence, source, q, username, since, limit = 60, offset = 0,
+    category, subcategory, confidence, source, q, username, since,
+    excludeCategory, sort = 'rank', limit = 60, offset = 0,
   } = {}) {
     const where = [];
     const p = {};
     if (category) { where.push('category = @category'); p.category = category; }
+    if (excludeCategory) { where.push('category != @excludeCategory'); p.excludeCategory = excludeCategory; }
     if (subcategory) { where.push('subcategory = @subcategory'); p.subcategory = subcategory; }
     if (confidence) { where.push('confidence = @confidence'); p.confidence = confidence; }
     if (source) { where.push('source = @source'); p.source = source; }
@@ -191,8 +207,13 @@ export const repo = {
     p.limit = Math.min(Number(limit) || 60, 500);
     p.offset = Number(offset) || 0;
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    // 'rank' floats genuine exotics (high priority) above random-dyed (Satin);
+    // 'recent' is pure chronological for the live stream.
+    const order = sort === 'recent'
+      ? 'found_at DESC'
+      : 'priority DESC, found_at DESC';
     return getDb()
-      .prepare(`SELECT * FROM findings ${clause} ORDER BY found_at DESC LIMIT @limit OFFSET @offset`)
+      .prepare(`SELECT * FROM findings ${clause} ORDER BY ${order} LIMIT @limit OFFSET @offset`)
       .all(p)
       .map(hydrate);
   },
