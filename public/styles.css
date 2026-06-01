@@ -271,3 +271,14 @@ footer {
 td.muted, .kv td.muted { color: var(--muted); }
 .badge.conf-high { border-color: #1c5a4a; color: var(--accent-2); }
 .badge.conf-medium { border-color: #6b5a1a; color: var(--gold); }
+
+/* Owner/location additions */
+.card-price { margin-top: 8px; font-size: 13px; color: var(--gold); text-align: right; }
+.card-foot span { display: inline-flex; align-items: center; gap: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-btn {
+  display: inline-block; margin-top: 12px;
+  background: var(--accent); color: #fff; border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.sc-btn:hover { filter: brightness(1.1); text-decoration: none; }
+.uuid-cell { font-size: 11px; word-break: break-all; }

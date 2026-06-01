@@ -4,6 +4,57 @@ const esc = (s) =>
   String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// SkyCrypt profile URL for a player. Accepts a username or UUID; appends the
+// specific SkyBlock profile (cute name like "Mango") when we know it, so the
+// link opens the exact profile the item was found on.
+function skycryptUrl(handle, profileName) {
+  if (!handle) return null;
+  let u = `https://sky.shiiyu.moe/stats/${encodeURIComponent(handle)}`;
+  if (profileName) u += `/${encodeURIComponent(profileName)}`;
+  return u;
+}
+
+// Render the owner as a SkyCrypt link. Works for both named players and AH
+// finds that only have a UUID (SkyCrypt accepts a UUID too). `short` truncates
+// a bare UUID for compact card display.
+function playerLink(f, { short = false } = {}) {
+  const handle = f.username || f.account_uuid;
+  if (!handle) return '—';
+  const label = f.username
+    ? esc(f.username)
+    : `<span class="mono">${esc(short ? String(handle).slice(0, 8) + '…' : handle)}</span>`;
+  const url = skycryptUrl(handle, f.profile_name);
+  return `<a href="${url}" target="_blank" rel="noopener">${label}</a>`;
+}
+
+// Friendly names for the raw inventory location keys Hypixel uses.
+const LOCATION_LABELS = {
+  inv_contents: 'Inventory',
+  inventory: 'Inventory',
+  ender_chest_contents: 'Ender Chest',
+  backpack_contents: 'Backpack',
+  personal_vault_contents: 'Personal Vault',
+  wardrobe_contents: 'Wardrobe',
+  equipment_contents: 'Equipment',
+  talisman_bag: 'Accessory Bag',
+  fishing_bag: 'Fishing Bag',
+  potion_bag: 'Potion Bag',
+  candy_inventory_contents: 'Candy Bag',
+  armor: 'Armor (equipped)',
+  inv_armor: 'Armor (equipped)',
+  auction: 'Auction House (listed for sale)',
+};
+function locationLabel(loc) {
+  if (!loc) return 'Unknown';
+  if (LOCATION_LABELS[loc]) return LOCATION_LABELS[loc];
+  // Fallback: turn snake_case into Title Case, drop a trailing "contents".
+  return String(loc)
+    .replace(/_contents$/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+
 const CATEGORIES = [
   { key: '', label: 'All' },
   { key: 'exotic', label: 'Exotics' },
@@ -117,9 +168,6 @@ function cardFor(f, flash = false) {
   const swatch = isExotic
     ? `<div class="swatch" style="background:#${esc(f.hex)}" title="#${esc(f.hex)}"></div>`
     : `<div class="swatch" style="background:linear-gradient(135deg,#2a2f3d,#3a4050)"></div>`;
-  const player = f.username
-    ? `<a href="https://sky.shiiyu.moe/stats/${encodeURIComponent(f.username)}" target="_blank" rel="noopener">${esc(f.username)}</a>`
-    : (f.account_uuid ? `<span class="mono">${esc(String(f.account_uuid).slice(0, 8))}…</span>` : '—');
   const price = f.price ? `${fmt(f.price)} coins` : '';
   const confBadge = f.confidence === 'low' ? `<span class="badge conf-low">low conf</span>` : '';
   return `
@@ -138,9 +186,10 @@ function cardFor(f, flash = false) {
       </div>
       ${f.reason ? `<div class="reason">${esc(f.reason)}</div>` : ''}
       <div class="card-foot">
-        <span>${player}</span>
-        <span>${esc(price)}</span>
+        <span title="Open on SkyCrypt">👤 ${playerLink(f, { short: true })}</span>
+        <span title="Where on their profile">📍 ${esc(locationLabel(f.location))}</span>
       </div>
+      ${price ? `<div class="card-price">${esc(price)}</div>` : ''}
     </div>`;
 }
 
@@ -297,10 +346,9 @@ function renderDetail(d) {
     ? `<div class="swatch big" style="background:#${esc(f.hex)}" title="#${esc(f.hex)}"></div>`
     : `<div class="swatch big" style="background:linear-gradient(135deg,#2a2f3d,#3a4050)"></div>`;
 
-  // Owner line.
-  const owner = f.username
-    ? `<a href="https://sky.shiiyu.moe/stats/${encodeURIComponent(f.username)}" target="_blank" rel="noopener">${esc(f.username)}</a>`
-    : (f.account_uuid ? `<span class="mono">${esc(f.account_uuid)}</span>` : '—');
+  // Owner line — links to the exact SkyCrypt profile (works for UUID-only AH finds too).
+  const owner = playerLink(f);
+  const scUrl = skycryptUrl(f.username || f.account_uuid, f.profile_name);
 
   // Base (non-dyed) price block.
   const bp = d.basePrice || {};
@@ -320,12 +368,7 @@ function renderDetail(d) {
       .map((r) => `<tr><td>${esc(r.item_name || r.item_id || '—')}</td><td class="mono">${esc(r.item_id || '')}</td><td>${fmt(r.c)}</td></tr>`)
       .join('');
     const owners = (cs.byOwner || [])
-      .map((r) => {
-        const who = r.username
-          ? `<a href="https://sky.shiiyu.moe/stats/${encodeURIComponent(r.username)}" target="_blank" rel="noopener">${esc(r.username)}</a>`
-          : `<span class="mono">${esc(String(r.account_uuid || '—').slice(0, 12))}…</span>`;
-        return `<tr><td>${who}</td><td>${fmt(r.c)}</td></tr>`;
-      })
+      .map((r) => `<tr><td>${playerLink(r, { short: true })}</td><td>${fmt(r.c)}</td></tr>`)
       .join('');
     colorBlock = `
       <div class="detail-section">
@@ -366,11 +409,14 @@ function renderDetail(d) {
     <div class="detail-section">
       <h4>Owner &amp; location</h4>
       <table class="kv"><tbody>
-        <tr><td>Owner</td><td>${owner}</td></tr>
-        <tr><td>Found in</td><td>${esc(f.location || '—')}</td></tr>
-        <tr><td>Source</td><td>${esc(f.source || '—')}</td></tr>
+        <tr><td>Player</td><td>${owner}</td></tr>
+        <tr><td>Profile</td><td>${f.profile_name ? esc(f.profile_name) : '<span class="muted">unknown</span>'}</td></tr>
+        <tr><td>Found in</td><td>📍 ${esc(locationLabel(f.location))}</td></tr>
+        <tr><td>Source</td><td>${esc(f.source === 'ah' ? 'Auction House' : (f.source || '—'))}</td></tr>
         ${f.price ? `<tr><td>Listed price (AH)</td><td>${fmt(f.price)} coins</td></tr>` : ''}
+        ${f.account_uuid ? `<tr><td>UUID</td><td class="mono uuid-cell">${esc(f.account_uuid)}</td></tr>` : ''}
       </tbody></table>
+      ${scUrl ? `<a class="sc-btn" href="${scUrl}" target="_blank" rel="noopener">View ${f.username ? esc(f.username) : 'player'} on SkyCrypt ↗</a>` : ''}
     </div>
 
     <div class="detail-section">
