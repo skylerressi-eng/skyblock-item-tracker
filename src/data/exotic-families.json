@@ -4,8 +4,9 @@
     "PURE": "Perfect RGB extremes (e.g. #000000, #ff0000). Impossible via normal dyeing — always exotic.",
     "TRUE_BLACK": "Crafted Necron/Storm pieces that stayed near-black on Floor 7 release day. Extremely valuable.",
     "CRAFTED": "Colour retained from a crafting ingredient (e.g. early yellow Shark/Sharp pieces).",
-    "OG_DYED": "Dyed before Nov 2019 with the vanilla dye method — colours unreachable by Crystal/Fairy. The classic exotics (Magma, Lapis, Dragon sets, Tarantula, etc.).",
-    "GLITCHED": "Colour carried over through an armour-upgrade glitch."
+    "OG_DYED": "Dyed before Nov 2019 with the vanilla dye method — colours unreachable by Crystal/Fairy. The classic exotics (Magma, Lapis, Dragon sets, Tarantula, etc.). This is the default tag for any off-default, non-known-dye colour.",
+    "GLITCHED": "Colour carried over through an armour-upgrade or fairy-dye glitch.",
+    "BLEACHED": "Cauldron-bleached then re-dyed, or otherwise off-chart light/washed colours. Recognised by the Exotic Cafe community as a distinct exotic type."
   },
   "PURE": [
     "000000", "ffffff", "ff0000", "00ff00", "0000ff",
@@ -16,5 +17,6 @@
   ],
   "CRAFTED": [],
   "OG_DYED": [],
-  "GLITCHED": []
+  "GLITCHED": [],
+  "BLEACHED": []
 }

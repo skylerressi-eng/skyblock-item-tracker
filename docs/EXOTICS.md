@@ -39,12 +39,29 @@ So exotic detection works on **any colourable item**, not just a hardcoded list.
 | **TRUE_BLACK** | Crafted Necron/Storm pieces that stayed near-black on Floor 7 release day. Famously valuable (True Black Storm chest: only one known). |
 | **CRAFTED** | Colour retained from a crafting ingredient (e.g. early *yellow* Shark/Sharp pieces). Open list. |
 | **OG_DYED** | Dyed before **Nov 2019** with the vanilla dye method — colours unreachable by Crystal/Fairy. The classic exotic sets below. Open list. |
-| **GLITCHED** | Colour carried through an armour-upgrade glitch. Open list. |
+| **GLITCHED** | Colour carried through an armour-upgrade / fairy-dye glitch. Open list. |
+| **BLEACHED** | Cauldron-bleached then re-dyed, or off-chart washed/light colours — a distinct type in the Exotic Cafe community. Open list. |
 
 "Open list" = there's no fixed chart; the engine flags these by them being
 **off-default and not a known dye**. Any such unmatched exotic colour is tagged
 **`OG_DYED`** (the classic exotic origin) — *medium* confidence, or *high* once
 the piece's default colour is learned/preloaded.
+
+> **It is not "just base colours."** The engine flags **any** off-default colour
+> that isn't a known Crystal/Fairy dye — so arbitrary OG hexes like `#4a5a35`,
+> `#640e3b`, `#c7c5c2` are all caught and tagged `OG_DYED`. `PURE`/`TRUE_BLACK`
+> are just *more specific* sub-tags layered on top, not the whole net.
+
+### Cross-reference: the Exotic Cafe model
+
+The [Exotic Cafe](https://discord.gg/gdSmQnJuMr) ("the birthplace of exotics",
+~21k members) categorises exotics by **how the colour was obtained** — OG,
+Bleached, Glitched, Crafted — **not** by a fixed hex list. This engine follows
+the same model: *exotic = off-default AND not an obtainable (Crystal/Fairy)
+dye*, then sub-tagged by origin. The Cafe's catalogue lives in their Discord
+(members-only), so the family sub-lists here are seeded from public sources
+(see below) and grow as the crawler learns. To sharpen sub-classification, paste
+confirmed hexes into the matching list in `src/data/exotic-families.json`.
 
 ### Classic exotic armour sets (community-known)
 Magma (most common, cheapest), Lapis, the Dragon sets (Young, Old, Wise, Strong,
@@ -149,6 +166,8 @@ Community definitions and hex charts were cross-checked across:
 - [Dyed Armor — Hypixel SkyBlock Wiki (Fandom)](https://hypixel-skyblock.fandom.com/wiki/Dyed_Armor)
 - [LeaPhant's SkyBlock gist (Crystal/Fairy hex data used by SkyCrypt)](https://gist.github.com/LeaPhant/6b10170be581ee68eeb275ff8e5242b9)
 - [Black Necron / Storm Armor — Hypixel Forums](https://hypixel.net/threads/black-necron-storm-armor.4584967/)
+- [Exotic Cafe Discord](https://discord.gg/gdSmQnJuMr) — the community exotic
+  catalogue & marketplace (members-only; its category model is mirrored here)
 - Exotic armor overview video: https://www.youtube.com/watch?v=NYMPTb06z3w
 
 > Prices and "one known" claims in the community guide are volatile/anecdotal and
