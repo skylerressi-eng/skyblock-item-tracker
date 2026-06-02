@@ -13,7 +13,12 @@ export async function getJson(url, { headers = {}, timeout = config.requestTimeo
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = text; }
     if (!res.ok) {
-      const err = new Error(`HTTP ${res.status} for ${url}`);
+      // Surface the API's own reason (Hypixel uses `cause`) in the message so
+      // logs show WHY, e.g. "HTTP 403 … — Invalid API key".
+      const cause = body && typeof body === 'object'
+        ? (body.cause || body.error || body.reason)
+        : (typeof body === 'string' ? body.slice(0, 120) : null);
+      const err = new Error(`HTTP ${res.status} for ${url}${cause ? ` — ${cause}` : ''}`);
       err.status = res.status;
       err.body = body;
       throw err;
