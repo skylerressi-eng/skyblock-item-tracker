@@ -1,7 +1,8 @@
 import { normHex, dist } from './colors.js';
 import { config } from '../config.js';
 import {
-  families, knownDyes, preloadedDefaultHex, isRandomDyed, isAnimated, isTieredColor,
+  families, knownDyes, preloadedDefaultHex, hasPreloadedDefault,
+  isRandomDyed, isAnimated, isTieredColor,
 } from './data.js';
 
 // Below this AH price (coins), an UNCONFIRMED exotic (no exact family match and
@@ -9,6 +10,18 @@ import {
 // nobody lists a genuine exotic for pocket change. Confirmed exotics (exact
 // PURE/family match, or off a learned default) bypass this.
 const MIN_EXOTIC_PRICE = config.minExoticPrice;
+
+// How many times a colour must be the modal colour for a piece before we trust
+// it as that piece's natural baseline (and suppress flagging it as exotic).
+const DOMINANT_MIN_COUNT = 3;
+
+// Common neutral leather colours that aren't exotics: vanilla undyed plus the
+// dark/light greys plain leather oscillates between (report B). Kept tight so
+// genuine True-Black (#000000–#131313 via the family list) still flags.
+const NEUTRAL_LEATHER = new Set(['a06540', '191919', '1a1a1a', '808080', 'e5e533']);
+function isNeutralLeatherColor(hex) {
+  return NEUTRAL_LEATHER.has(normHex(hex));
+}
 
 // --- What counts as exotic? -------------------------------------------------
 // An exotic is a colourable armour piece whose colour CANNOT be obtained today:
@@ -77,7 +90,7 @@ export function classifyFamily(hex) {
 //   item: normalized item (see items/extract.js)
 //   ctx.getDefaultHex(itemId) -> learned default hex or null (empirical)
 // Returns a finding fragment or null.
-export function classifyExotic(item, { getDefaultHex, price = null } = {}) {
+export function classifyExotic(item, { getDefaultHex, getDominantHex, price = null } = {}) {
   if (!item || !item.hex) return null; // only colourable (leather) armour has a colour
   const hex = normHex(item.hex);
   if (!hex) return null;
@@ -115,66 +128,79 @@ export function classifyExotic(item, { getDefaultHex, price = null } = {}) {
     };
   }
 
-  // 2. Resolve this piece's default: empirically-learned wins, else preloaded.
+  // 2. Resolve baselines. `learned` = confirmed modal colour (seen enough times);
+  // `preloaded` = curated factory colour; `dominant` = the most-common colour
+  // seen so far even before it's confirmed.
   const learned = getDefaultHex ? getDefaultHex(item.itemId) : null;
-  const def = learned || preloadedDefaultHex(item.itemId);
+  const preloaded = hasPreloadedDefault(item.itemId) ? normHex(preloadedDefaultHex(item.itemId)) : null;
+  const dominant = getDominantHex ? getDominantHex(item.itemId) : null;
 
-  // 3. Showing its own default colour -> not exotic.
-  if (def && hex === normHex(def)) return null;
+  // 3. Showing a known baseline colour -> not exotic.
+  if (learned && hex === normHex(learned)) return null;
+  if (preloaded && hex === preloaded) return null;
+  // 3b. ROOT-CAUSE FIX (report C/F): a piece whose colour IS the dominant colour
+  // observed for that item is showing its natural baseline, NOT an exotic — even
+  // before the default is formally "confirmed". This is what stops natural set
+  // colours (Rancher's, Yog, Terror, Thunder, Mushroom #ff0000, …) being flagged
+  // on first sight. Requires a little evidence so a single observation can't
+  // self-justify.
+  if (dominant && hex === normHex(dominant.hex) && dominant.count >= DOMINANT_MIN_COUNT) {
+    return null;
+  }
 
   // 4. Crystal/Fairy (or other known obtainable) dye -> NOT exotic.
-  const known = matchKnownDye(hex);
-  if (known) return null;
+  if (matchKnownDye(hex)) return null;
 
-  // 5. Game-random-dyed set (e.g. Satin, Oxford, Velvet, Cashmere)? The colour
-  // is just a random roll — NOT a genuine exotic. Tag it 'random_dyed' and set
-  // drop:true so callers can skip storing it (and never learn its colour as a
-  // "default", which would otherwise make the next random roll look off-default).
+  // 5. Game-random-dyed set (Satin/Oxford/Velvet/Cashmere) -> not exotic.
   if (isRandomDyed(item.itemId)) {
     return {
-      category: 'random_dyed',
-      subcategory: 'RANDOM',
-      hex,
-      confidence: 'low',
+      category: 'random_dyed', subcategory: 'RANDOM', hex, confidence: 'low',
       reason: 'Game-randomised colour (e.g. Satin/Oxford) — not a custom/OG exotic',
-      priority: 5,
-      drop: true,
+      priority: 5, drop: true,
     };
   }
 
-  // 6. Off-default and not a known dye -> EXOTIC. Sub-classify the origin.
-  // `priority` floats genuine exotics to the top: exact family (PURE/TRUE_BLACK)
-  // highest, then off-learned-default OG exotics, then unconfirmed.
+  // 6. Vanilla/neutral leather greys (report B): plain leather is freely dyeable
+  // and oscillates; common neutral greys are not exotics.
+  if (isNeutralLeatherColor(hex) && !learned && !preloaded) return null;
+
+  // 7. Cheap AH listings are baseline-colour fakes (report D/F), unless the
+  // colour is a confirmed exotic family (handled below as high-confidence).
   const fam = classifyFamily(hex);
-  let confidence;
-  let reason;
-  let priority;
-  if (fam.exact) {
-    confidence = 'high';
-    reason = `Matches a known ${fam.name.replace('_', ' ')} exotic colour`;
-    priority = 100;
-  } else if (learned) {
-    confidence = 'high';
-    reason = `Off-default colour (learned default #${learned}), not a Crystal/Fairy dye — likely a genuine OG exotic`;
-    priority = 80;
-  } else {
-    // Off a *preloaded* default (or vanilla fallback) but not yet learned. This
-    // is the weakest signal — apply the price floor: a real exotic isn't cheap.
-    if (price != null && price < MIN_EXOTIC_PRICE) {
-      return {
-        category: 'tiered_color',
-        subcategory: 'CHEAP',
-        hex,
-        confidence: 'low',
-        reason: `Off-default but listed for only ${price} coins — almost certainly a baseline/tier colour, not a real exotic`,
-        priority: 2,
-        drop: true,
-      };
-    }
-    confidence = 'medium';
-    reason = 'Off-default colour, not a Crystal/Fairy dye — likely OG/glitched exotic';
-    priority = 50;
+  const confirmed = fam.exact || Boolean(learned);
+  if (!confirmed && price != null && price < MIN_EXOTIC_PRICE) {
+    return {
+      category: 'tiered_color', subcategory: 'CHEAP', hex, confidence: 'low',
+      reason: `Off-default but listed for only ${price} coins — almost certainly a baseline/tier colour, not a real exotic`,
+      priority: 2, drop: true,
+    };
   }
 
-  return { category: 'exotic', subcategory: fam.name, hex, confidence, reason, priority };
+  // 8. Classify the genuine exotic.
+  if (fam.exact) {
+    // Even an exact PURE/family match is suppressed if it's THIS piece's natural
+    // dominant colour (e.g. Mushroom #ff0000 across many owners).
+    if (dominant && hex === normHex(dominant.hex) && dominant.count >= DOMINANT_MIN_COUNT) return null;
+    return {
+      category: 'exotic', subcategory: fam.name, hex, confidence: 'high',
+      reason: `Matches a known ${fam.name.replace('_', ' ')} exotic colour`, priority: 100,
+    };
+  }
+  if (learned) {
+    return {
+      category: 'exotic', subcategory: fam.name, hex, confidence: 'high',
+      reason: `Off-default colour (learned default #${learned}) — likely a genuine OG exotic`, priority: 80,
+    };
+  }
+  if (preloaded) {
+    // Off a curated factory default but not yet learned: medium confidence.
+    return {
+      category: 'exotic', subcategory: fam.name, hex, confidence: 'medium',
+      reason: `Off the known default #${preloaded}, not a Crystal/Fairy dye — likely OG/glitched exotic`, priority: 50,
+    };
+  }
+  // 9. No baseline of any kind yet (report F): SUPPRESS rather than flag-then-ask.
+  // We still record the colour (caller does), so a real outlier surfaces once a
+  // baseline exists. Returning null here is the core flood fix.
+  return null;
 }

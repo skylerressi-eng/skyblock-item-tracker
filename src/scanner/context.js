@@ -8,6 +8,7 @@ const curatedIndex = buildCuratedIndex();
 export function makeCtx() {
   return {
     getDefaultHex: (id) => repo.getDefaultHex(id),
+    getDominantHex: (id) => repo.getDominantHex(id),
     rareTiers: config.rareTiers,
     curatedIndex,
     recordPieceColor: (id, hex) => repo.recordPieceColor(id, hex),

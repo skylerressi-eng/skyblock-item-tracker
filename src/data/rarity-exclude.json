@@ -1,0 +1,6 @@
+{
+  "_note": "Item-id SUBSTRING patterns (uppercased) to EXCLUDE from special_rarity flagging, even if their in-game rarity is SPECIAL/VERY_SPECIAL. Use for commonly-owned items whose tier inflates the feed without being genuinely notable. Source: false-positive report section D.",
+  "patterns": [
+    "KUUDRA_FOLLOWER"
+  ]
+}

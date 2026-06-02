@@ -11,6 +11,7 @@ export const defaultColors = read('default-colors.json');  // preloaded factory 
 export const randomDyed = read('random-dyed.json');        // game-random-dyed sets (Satin…)
 export const animatedSets = read('animated-sets.json');    // animated colour-cycle sets (Great Spook)
 export const tieredSets = read('tiered-color-sets.json');  // tier/biome-coloured, non-dyeable sets
+export const rarityExclude = read('rarity-exclude.json');  // ids excluded from special_rarity
 export const dyeColors = read('dye-colors.json');
 export const rareItemsRaw = read('rare-items.json');
 
@@ -20,6 +21,13 @@ export function preloadedDefaultHex(itemId) {
     return defaultColors[itemId];
   }
   return defaultColors._vanillaLeather || 'a06540';
+}
+
+// True only when there is an EXPLICIT curated default for this exact id (not the
+// vanilla fallback). Used so we don't treat the generic leather colour as a
+// per-piece baseline.
+export function hasPreloadedDefault(itemId) {
+  return Boolean(itemId && Object.prototype.hasOwnProperty.call(defaultColors, itemId));
 }
 
 export const RANDOM_DYED_PATTERNS = (randomDyed.patterns || []).map((s) => String(s).toUpperCase());
@@ -33,6 +41,15 @@ export function isRandomDyed(itemId) {
 }
 
 export const TIERED_SET_PATTERNS = (tieredSets.patterns || []).map((s) => String(s).toUpperCase());
+export const RARITY_EXCLUDE_PATTERNS = (rarityExclude.patterns || []).map((s) => String(s).toUpperCase());
+
+// True if a piece should be excluded from special_rarity flagging (over-common
+// SPECIAL items like Kuudra Follower).
+export function isRarityExcluded(itemId) {
+  if (!itemId) return false;
+  const id = String(itemId).toUpperCase();
+  return RARITY_EXCLUDE_PATTERNS.some((p) => id.includes(p));
+}
 
 // True if the item id belongs to a tier/biome-coloured, non-dyeable set (e.g.
 // Frozen Blaze, Crimson Isle/Kuudra armour). Added after dyeing was patched, so

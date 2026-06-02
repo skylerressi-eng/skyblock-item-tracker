@@ -72,10 +72,14 @@ test('exotics: a modern dye_item piece is NOT exotic', () => {
   assert.equal(classifyExotic(item, ctx()), null);
 });
 
-test('exotics: undyed vanilla leather is NOT exotic; unknown default is medium-confidence', () => {
+test('exotics: undyed vanilla leather is NOT exotic; no-baseline colour is SUPPRESSED', () => {
   assert.equal(classifyExotic({ itemId: 'X', hex: 'a06540', extra: {} }, ctx()), null);
-  const f = classifyExotic({ itemId: 'X', hex: '654321', extra: {} }, ctx());
-  assert.equal(f.confidence, 'medium');
+  // Root-cause fix (report C/F): an off-chart colour with NO known baseline is
+  // suppressed (not flagged) until a baseline is learned, to stop the flood.
+  assert.equal(classifyExotic({ itemId: 'X', hex: '654321', extra: {} }, ctx()), null);
+  // Once a different default is known, the same colour IS a real exotic.
+  const f = classifyExotic({ itemId: 'X', hex: '654321', extra: {} }, ctx({ X: '22d3ee' }));
+  assert.equal(f.confidence, 'high');
 });
 
 test('exotics: Crystal and Fairy dye colours are NOT exotic', () => {
@@ -88,9 +92,9 @@ test('exotics: Crystal and Fairy dye colours are NOT exotic', () => {
   assert.equal(classifyExotic({ itemId: 'X', hex: 'b266ff', extra: {} }, ctx()), null);
 });
 
-test('exotics: a true off-chart colour IS exotic even if it is a colourful armour', () => {
-  // #654321 is not vanilla, not Crystal/Fairy, not a piece default -> exotic
-  const f = classifyExotic({ itemId: 'GENERIC_LEATHER_HELMET', hex: '654321', extra: {} }, ctx());
+test('exotics: a true off-baseline colour IS exotic once a baseline is known', () => {
+  // With a learned default, an off-default colour is a genuine exotic.
+  const f = classifyExotic({ itemId: 'GENERIC_LEATHER_HELMET', hex: '654321', extra: {} }, ctx({ GENERIC_LEATHER_HELMET: '224466' }));
   assert.equal(f.category, 'exotic');
 });
 
@@ -120,6 +124,38 @@ test('satin: a Satin piece with an off-default colour is random_dyed, NOT exotic
   assert.ok(f.priority < 10, 'random_dyed must rank far below real exotics');
 });
 
+test('baselines: reported natural set colours are NOT exotic (Rancher/Mushroom/Yog)', () => {
+  // Section A: each piece at its preloaded natural colour must not flag.
+  assert.equal(classifyExotic({ itemId: 'RANCHERS_BOOTS', hex: 'cc5500', extra: {} }, ctx()), null);
+  assert.equal(classifyExotic({ itemId: 'MUSHROOM_CHESTPLATE', hex: 'ff0000', extra: {} }, ctx()), null);
+  assert.equal(classifyExotic({ itemId: 'ARMOR_OF_YOG_HELMET', hex: 'c83200', extra: {} }, ctx()), null);
+  assert.equal(classifyExotic({ itemId: 'THUNDER_BOOTS', hex: '24dde5', extra: {} }, ctx()), null);
+});
+
+test('dominant suppression (report C/F): natural colour not flagged before formal confirm', () => {
+  // No learned/preloaded default, but the colour is the dominant observed one
+  // for the piece -> treated as natural baseline, NOT exotic.
+  const dom = { hex: '9e7003', count: 5, total: 6, share: 0.83 };
+  const c = { getDefaultHex: () => null, getDominantHex: () => dom };
+  assert.equal(classifyExotic({ itemId: 'ROTTEN_X', hex: '9e7003', extra: {} }, c), null);
+  // A genuinely different colour against that dominant baseline still surfaces…
+  // but only once there's a confirmed/preloaded default; with only a dominant
+  // baseline and an off-colour we stay conservative (suppressed).
+  assert.equal(classifyExotic({ itemId: 'ROTTEN_X', hex: '123456', extra: {} }, c), null);
+});
+
+test('neutral leather (report B): common neutral greys are not exotic', () => {
+  for (const hex of ['191919', '1a1a1a', '808080', 'e5e533']) {
+    assert.equal(classifyExotic({ itemId: 'GENERIC_HELMET', hex, extra: {} }, ctx()), null, `#${hex}`);
+  }
+});
+
+test('rarity-exclude (report D): Kuudra Follower is not special_rarity', () => {
+  assert.equal(classifyRarity({ itemId: 'KUUDRA_FOLLOWER_CHESTPLATE', rarity: 'SPECIAL' }, { rareTiers: RARE_TIERS }), null);
+  // a normal SPECIAL item still flags
+  assert.equal(classifyRarity({ itemId: 'POTATO_TALISMAN', rarity: 'SPECIAL' }, { rareTiers: RARE_TIERS }).category, 'special_rarity');
+});
+
 test('tiered: Frozen Blaze / Crimson Isle colours are tiered_color, NOT exotic', () => {
   // The reported false positive: Frozen Blaze #f7da33 "learned default #a0daef".
   const fb = classifyExotic({ itemId: 'FROZEN_BLAZE_CHESTPLATE', hex: 'f7da33', extra: {} }, ctx({ FROZEN_BLAZE_CHESTPLATE: 'a0daef' }));
@@ -138,11 +174,13 @@ test('tiered: a real OG-dyeable set is NOT caught by the tiered list', () => {
 });
 
 test('price floor: a dirt-cheap unconfirmed exotic is dropped, a pricey one is kept', () => {
-  const cheap = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 37 });
+  // ARMOR_OF_MAGMA has a preloaded default (#ff9300), so an off-colour reaches
+  // the price floor instead of being suppressed for lack of a baseline.
+  const cheap = classifyExotic({ itemId: 'ARMOR_OF_MAGMA_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 37 });
   assert.equal(cheap.category, 'tiered_color');
   assert.equal(cheap.subcategory, 'CHEAP');
   assert.equal(cheap.drop, true);
-  const pricey = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 5000000 });
+  const pricey = classifyExotic({ itemId: 'ARMOR_OF_MAGMA_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 5000000 });
   assert.equal(pricey.category, 'exotic');
 });
 
@@ -197,8 +235,8 @@ test('animated: a known frame hex is excluded even on an unexpected id', () => {
 });
 
 test('animated: a genuine exotic colour on a non-animated piece still flags', () => {
-  // #830094 (one off a frame) on a normal piece is still a real exotic.
-  const f = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '830094', extra: {} }, ctx());
+  // #830094 (one off a frame) on a normal piece with a known baseline is exotic.
+  const f = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '830094', extra: {} }, ctx({ WISE_DRAGON_CHESTPLATE: '29f0e9' }));
   assert.equal(f.category, 'exotic');
 });
 

@@ -4,7 +4,10 @@ import { config, ROOT } from './config.js';
 import { getDb, repo } from './db/index.js';
 import {
   RANDOM_DYED_PATTERNS, ANIMATED_PATTERNS, ANIMATED_DISTINCTIVE_FRAMES, TIERED_SET_PATTERNS,
+  isRarityExcluded,
 } from './items/data.js';
+import { classifyExotic } from './items/exotics.js';
+import { makeCtx } from './scanner/context.js';
 import { scanRouter } from './routes/scan.js';
 import { findingsRouter } from './routes/findings.js';
 import { pricesRouter } from './routes/prices.js';
@@ -28,10 +31,15 @@ if (config.dropRandomDyed) {
   const an = repo.purgeItemPatterns(ANIMATED_PATTERNS);
   const frames = repo.purgeFindingsByHex([...ANIMATED_DISTINCTIVE_FRAMES]);
   const cheap = repo.purgeCheapExotics(config.minExoticPrice);
-  const findings = rd.findings + ti.findings + an.findings + frames + cheap;
+  // Re-validate stored exotics against the CURRENT classifier so natural set
+  // colours added to the baselines (Rancher's, Mushroom, Yog, …) are cleaned
+  // retroactively, and remove rarity-excluded items (Kuudra Follower).
+  const reclassified = repo.reclassifyExotics(classifyExotic, makeCtx);
+  const rarity = repo.purgeRarityExcluded(isRarityExcluded);
+  const findings = rd.findings + ti.findings + an.findings + frames + cheap + reclassified + rarity;
   const colors = rd.colors + ti.colors + an.colors;
   if (findings || colors) {
-    console.log(`[cleanup] purged ${findings} false-positive finding(s) (random-dyed + tiered + animated + cheap) and ${colors} poisoned colour default(s)`);
+    console.log(`[cleanup] purged ${findings} false-positive finding(s) (random/tiered/animated/cheap/natural-colour/rarity) and ${colors} poisoned colour default(s)`);
   }
 }
 

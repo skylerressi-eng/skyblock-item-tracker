@@ -190,6 +190,41 @@ export const repo = {
       .run(minPrice).changes;
   },
 
+  // Re-run a classifier over every stored exotic/random_dyed/animated/tiered
+  // finding and delete any now judged NOT exotic (e.g. natural set colours like
+  // Rancher's #cc5500 / Mushroom #ff0000 after preloaded baselines were added).
+  // `classifyFn(item, ctx)` -> finding fragment or null. Returns the count removed.
+  reclassifyExotics(classifyFn, ctxFactory) {
+    const d = getDb();
+    const rows = d
+      .prepare(`SELECT id, item_id, hex, price FROM findings
+                WHERE category IN ('exotic','random_dyed','animated','tiered_color') AND hex IS NOT NULL`)
+      .all();
+    const del = d.prepare('DELETE FROM findings WHERE id = ?');
+    let removed = 0;
+    const tx = d.transaction(() => {
+      for (const r of rows) {
+        const ctx = { ...ctxFactory(), price: r.price };
+        const fr = classifyFn({ itemId: r.item_id, hex: r.hex, extra: {} }, ctx);
+        // Remove if it's no longer a genuine, stored-worthy exotic.
+        if (!fr || fr.drop || fr.category !== 'exotic') { del.run(r.id); removed++; }
+      }
+    });
+    tx();
+    return removed;
+  },
+
+  // Drop special_rarity findings whose item id matches an exclusion predicate
+  // (e.g. Kuudra Follower). `pred(itemId)` -> boolean.
+  purgeRarityExcluded(pred) {
+    const d = getDb();
+    const rows = d.prepare("SELECT id, item_id FROM findings WHERE category = 'special_rarity'").all();
+    const del = d.prepare('DELETE FROM findings WHERE id = ?');
+    let removed = 0;
+    for (const r of rows) if (pred(r.item_id)) { del.run(r.id); removed++; }
+    return removed;
+  },
+
   // ---- accounts ---------------------------------------------------------
   upsertAccount({ uuid, username, source = 'manual', profileCount = 0, note = null }) {
     if (!uuid) return;
@@ -209,9 +244,12 @@ export const repo = {
   // ---- findings ---------------------------------------------------------
   insertFinding(f) {
     const t = now();
+    // Dedup by the physical item within a category. Subcategory is intentionally
+    // EXCLUDED so the same piece can't appear twice (e.g. once OG_DYED, once bare
+    // EXOTIC) when its sub-classification changes between scans (report E).
     const dedupKey = f.item_uuid
-      ? `u:${f.item_uuid}:${f.category}:${f.subcategory || ''}`
-      : `n:${f.account_uuid || '?'}:${f.item_id}:${f.hex || ''}:${f.category}:${f.subcategory || ''}`;
+      ? `u:${f.item_uuid}:${f.category}`
+      : `n:${f.account_uuid || '?'}:${f.item_id}:${f.hex || ''}:${f.category}`;
     const res = getDb()
       .prepare(
         `INSERT INTO findings
@@ -365,6 +403,8 @@ export const repo = {
       .run(itemId, hex);
   },
 
+  // Confirmed default: the modal colour, but only once we've seen it enough
+  // times to trust it. Returned hex is treated as "this piece's real baseline".
   getDefaultHex(itemId) {
     if (!itemId) return null;
     const row = getDb()
@@ -372,6 +412,27 @@ export const repo = {
       .get(itemId);
     if (row && row.count >= config.pieceColorMinSamples) return row.hex;
     return null;
+  },
+
+  // The most-common colour seen for a piece so far, with its share of all
+  // observations — used to suppress false positives BEFORE a default is
+  // formally confirmed. { hex, count, total, share } or null.
+  getDominantHex(itemId) {
+    if (!itemId) return null;
+    const d = getDb();
+    const top = d
+      .prepare('SELECT hex, count FROM piece_colors WHERE item_id = ? ORDER BY count DESC LIMIT 1')
+      .get(itemId);
+    if (!top) return null;
+    const total = d.prepare('SELECT SUM(count) s FROM piece_colors WHERE item_id = ?').get(itemId).s || 0;
+    return { hex: top.hex, count: top.count, total, share: total ? top.count / total : 0 };
+  },
+
+  // How many DISTINCT colours we've seen for a piece. A piece seen in many
+  // colours is freely-dyeable; one stuck on a single colour is a fixed baseline.
+  distinctColorCount(itemId) {
+    if (!itemId) return 0;
+    return getDb().prepare('SELECT COUNT(*) c FROM piece_colors WHERE item_id = ?').get(itemId).c;
   },
 
   // ---- price cache ------------------------------------------------------

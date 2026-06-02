@@ -1,15 +1,18 @@
 // Rarity-tier and curated-list classification.
+import { isRarityExcluded } from './data.js';
 
 export const TIER_ORDER = [
   'COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY',
   'MYTHIC', 'DIVINE', 'SPECIAL', 'VERY_SPECIAL', 'ULTIMATE',
 ];
 
-// Flag items whose rarity tier is in the configured "rare" set.
+// Flag items whose rarity tier is in the configured "rare" set, unless the item
+// is on the rarity-exclude list (over-common SPECIAL items, e.g. Kuudra Follower).
 export function classifyRarity(item, { rareTiers = [] } = {}) {
   const r = (item.rarity || '').toUpperCase();
   if (!r) return null;
   if (!rareTiers.includes(r)) return null;
+  if (isRarityExcluded(item.itemId)) return null;
   return {
     category: 'special_rarity',
     subcategory: r,
