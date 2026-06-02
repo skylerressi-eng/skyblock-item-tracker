@@ -6,7 +6,7 @@ import { getProfile, collectItemsFromProfile } from '../clients/skycrypt.js';
 import { decodeInventory } from '../items/nbt.js';
 import { normalizeNbtItem, normalizeSkycryptItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
-import { isRandomDyed, isAnimated } from '../items/data.js';
+import { isRandomDyed, isAnimated, isTieredColor } from '../items/data.js';
 import { makeCtx, toFinding } from './context.js';
 
 // Recursively find inventory blobs shaped { type, data:"<base64>" }, tagging
@@ -115,7 +115,8 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   // random-dyed sets, whose colours are meaningless and would poison defaults.
   for (const it of items) {
     if (it.hex && !(it.extra && it.extra.dye_item)
-        && !isRandomDyed(it.itemId) && !isAnimated(it.itemId, it.hex)) {
+        && !isRandomDyed(it.itemId) && !isAnimated(it.itemId, it.hex)
+        && !isTieredColor(it.itemId)) {
       ctx.recordPieceColor(it.itemId, it.hex);
     }
   }

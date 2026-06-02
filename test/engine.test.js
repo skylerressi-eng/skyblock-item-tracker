@@ -120,6 +120,39 @@ test('satin: a Satin piece with an off-default colour is random_dyed, NOT exotic
   assert.ok(f.priority < 10, 'random_dyed must rank far below real exotics');
 });
 
+test('tiered: Frozen Blaze / Crimson Isle colours are tiered_color, NOT exotic', () => {
+  // The reported false positive: Frozen Blaze #f7da33 "learned default #a0daef".
+  const fb = classifyExotic({ itemId: 'FROZEN_BLAZE_CHESTPLATE', hex: 'f7da33', extra: {} }, ctx({ FROZEN_BLAZE_CHESTPLATE: 'a0daef' }));
+  assert.equal(fb.category, 'tiered_color');
+  assert.equal(fb.drop, true);
+  // Crimson Isle / Kuudra tier colours
+  for (const id of ['CRIMSON_CHESTPLATE', 'TERROR_LEGGINGS', 'AURORA_BOOTS', 'HOLLOW_HELMET']) {
+    assert.equal(classifyExotic({ itemId: id, hex: 'ff700a', extra: {} }, ctx()).category, 'tiered_color', id);
+  }
+});
+
+test('tiered: a real OG-dyeable set is NOT caught by the tiered list', () => {
+  // ARMOR_OF_MAGMA (OG-dyeable) must still flag; only MAGMA_LORD is tiered.
+  assert.equal(classifyExotic({ itemId: 'ARMOR_OF_MAGMA_CHESTPLATE', hex: '272727', extra: {} }, ctx()).category, 'exotic');
+  assert.equal(classifyExotic({ itemId: 'MAGMA_LORD_CHESTPLATE', hex: '272727', extra: {} }, ctx()).category, 'tiered_color');
+});
+
+test('price floor: a dirt-cheap unconfirmed exotic is dropped, a pricey one is kept', () => {
+  const cheap = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 37 });
+  assert.equal(cheap.category, 'tiered_color');
+  assert.equal(cheap.subcategory, 'CHEAP');
+  assert.equal(cheap.drop, true);
+  const pricey = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '654321', extra: {} }, { getDefaultHex: () => null, price: 5000000 });
+  assert.equal(pricey.category, 'exotic');
+});
+
+test('price floor: a CONFIRMED exotic (PURE) is kept even when cheap', () => {
+  // #000000 is an exact PURE match -> high confidence -> price floor bypassed.
+  const f = classifyExotic({ itemId: 'WISE_DRAGON_CHESTPLATE', hex: '000000', extra: {} }, { getDefaultHex: () => null, price: 37 });
+  assert.equal(f.category, 'exotic');
+  assert.equal(f.subcategory, 'PURE');
+});
+
 test('random-dyed: all four named cosmetic pieces are downranked + dropped', () => {
   // Velvet Top Hat, Cashmere Jacket, Satin Trousers, Oxford Shoes
   for (const id of ['VELVET_TOP_HAT', 'CASHMERE_JACKET', 'SATIN_TROUSERS', 'OXFORD_SHOES']) {

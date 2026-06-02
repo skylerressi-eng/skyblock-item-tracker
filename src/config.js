@@ -38,6 +38,12 @@ export const config = {
   // (filed under the low-priority 'random_dyed' category instead).
   dropRandomDyed: bool(process.env.DROP_RANDOM_DYED, true),
 
+  // Price floor (coins) for UNCONFIRMED exotics found on the Auction House. An
+  // off-default colour with no exact-family/learned-default match, listed below
+  // this, is treated as a baseline-colour false positive (real exotics sell for
+  // millions; nobody dumps one for 37 coins). 0 disables the floor.
+  minExoticPrice: Number(process.env.MIN_EXOTIC_PRICE || 100000),
+
   // Endpoints
   hypixelBase: 'https://api.hypixel.net',
   coflnetBase: 'https://sky.coflnet.com/api',

@@ -1,0 +1,17 @@
+{
+  "_note": "Armour sets whose colour is NOT a player dye, so off-default colours are false positives. These were all added AFTER vanilla dyeing was patched (Nov 2019) and/or their colour shifts by tier/upgrade — so they can never be OG exotics. Matching is by item-id SUBSTRING (uppercased). A colourable piece matching one of these is tagged 'tiered_color' (not exotic) and dropped. Conservative on purpose — see _warning. Source: community analysis of Crimson Isle / Kuudra / fishing tier colours.",
+  "patterns": [
+    "FROZEN_BLAZE",
+    "MAGMA_LORD",
+    "CRIMSON_",
+    "TERROR_",
+    "AURORA_",
+    "HOLLOW_",
+    "FERVOR_",
+    "THERMODYNAMIC",
+    "KUUDRA",
+    "GLACITE_",
+    "MOOGMA"
+  ],
+  "_warning": "Do NOT add classic OG-dyeable sets here: ARMOR_OF_MAGMA (Magma Armor), LAPIS, *_DRAGON (Dragon sets), TARANTULA, REAPER (Reaper armour has CONFIRMED real exotics) — those CAN be genuine exotics. MAGMA_LORD (Crimson Isle) is distinct from ARMOR_OF_MAGMA and is correctly listed. Cheap-AH false positives on other sets are handled separately by the price floor, so we don't need to guess mob/dungeon item ids here."
+}

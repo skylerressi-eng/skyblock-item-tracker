@@ -177,6 +177,19 @@ export const repo = {
       .run(...hs).changes;
   },
 
+  // Remove UNCONFIRMED exotics (medium confidence = no exact-family/learned
+  // match) that are listed below the price floor — baseline-colour false
+  // positives. High-confidence exotics (PURE/family/learned-default) are kept
+  // regardless of price.
+  purgeCheapExotics(minPrice) {
+    if (!minPrice || minPrice <= 0) return 0;
+    return getDb()
+      .prepare(`DELETE FROM findings
+                WHERE category = 'exotic' AND confidence = 'medium'
+                  AND price IS NOT NULL AND price < ?`)
+      .run(minPrice).changes;
+  },
+
   // ---- accounts ---------------------------------------------------------
   upsertAccount({ uuid, username, source = 'manual', profileCount = 0, note = null }) {
     if (!uuid) return;

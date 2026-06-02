@@ -10,6 +10,7 @@ export const knownDyes = read('known-dyes.json');          // Crystal/Fairy = NO
 export const defaultColors = read('default-colors.json');  // preloaded factory colours
 export const randomDyed = read('random-dyed.json');        // game-random-dyed sets (Satin…)
 export const animatedSets = read('animated-sets.json');    // animated colour-cycle sets (Great Spook)
+export const tieredSets = read('tiered-color-sets.json');  // tier/biome-coloured, non-dyeable sets
 export const dyeColors = read('dye-colors.json');
 export const rareItemsRaw = read('rare-items.json');
 
@@ -29,6 +30,17 @@ export function isRandomDyed(itemId) {
   if (!itemId) return false;
   const id = String(itemId).toUpperCase();
   return RANDOM_DYED_PATTERNS.some((p) => id.includes(p));
+}
+
+export const TIERED_SET_PATTERNS = (tieredSets.patterns || []).map((s) => String(s).toUpperCase());
+
+// True if the item id belongs to a tier/biome-coloured, non-dyeable set (e.g.
+// Frozen Blaze, Crimson Isle/Kuudra armour). Added after dyeing was patched, so
+// any off-default colour is a natural tier colour, never an OG exotic.
+export function isTieredColor(itemId) {
+  if (!itemId) return false;
+  const id = String(itemId).toUpperCase();
+  return TIERED_SET_PATTERNS.some((p) => id.includes(p));
 }
 
 // Animated sets: id-substring patterns + the set of all known frame hexes.

@@ -1,5 +1,14 @@
 import { normHex, dist } from './colors.js';
-import { families, knownDyes, preloadedDefaultHex, isRandomDyed, isAnimated } from './data.js';
+import { config } from '../config.js';
+import {
+  families, knownDyes, preloadedDefaultHex, isRandomDyed, isAnimated, isTieredColor,
+} from './data.js';
+
+// Below this AH price (coins), an UNCONFIRMED exotic (no exact family match and
+// no learned default) is almost certainly a baseline-colour false positive —
+// nobody lists a genuine exotic for pocket change. Confirmed exotics (exact
+// PURE/family match, or off a learned default) bypass this.
+const MIN_EXOTIC_PRICE = config.minExoticPrice;
 
 // --- What counts as exotic? -------------------------------------------------
 // An exotic is a colourable armour piece whose colour CANNOT be obtained today:
@@ -68,13 +77,28 @@ export function classifyFamily(hex) {
 //   item: normalized item (see items/extract.js)
 //   ctx.getDefaultHex(itemId) -> learned default hex or null (empirical)
 // Returns a finding fragment or null.
-export function classifyExotic(item, { getDefaultHex } = {}) {
+export function classifyExotic(item, { getDefaultHex, price = null } = {}) {
   if (!item || !item.hex) return null; // only colourable (leather) armour has a colour
   const hex = normHex(item.hex);
   if (!hex) return null;
 
   // 1. Modern dye-system pieces are never exotic.
   if (item.extra && item.extra.dye_item) return null;
+
+  // 1a. Tier/biome-coloured, non-dyeable sets (Frozen Blaze, Crimson Isle/
+  // Kuudra, …) were added after dyeing was patched — any off-default colour is
+  // a natural tier colour, never an exotic. Drop them.
+  if (isTieredColor(item.itemId)) {
+    return {
+      category: 'tiered_color',
+      subcategory: 'TIER',
+      hex,
+      confidence: 'low',
+      reason: 'Tier/biome colour of a non-dyeable set (e.g. Frozen Blaze / Crimson Isle) — not a dye',
+      priority: 2,
+      drop: true,
+    };
+  }
 
   // 1b. Animated colour-cycle sets (e.g. Great/Greater Spook) show a live
   // animation frame, never a dye — every frame (incl. #000000) is a false
@@ -134,9 +158,21 @@ export function classifyExotic(item, { getDefaultHex } = {}) {
     reason = `Off-default colour (learned default #${learned}), not a Crystal/Fairy dye — likely a genuine OG exotic`;
     priority = 80;
   } else {
-    // Off a *preloaded* default (or vanilla fallback) but not yet learned.
+    // Off a *preloaded* default (or vanilla fallback) but not yet learned. This
+    // is the weakest signal — apply the price floor: a real exotic isn't cheap.
+    if (price != null && price < MIN_EXOTIC_PRICE) {
+      return {
+        category: 'tiered_color',
+        subcategory: 'CHEAP',
+        hex,
+        confidence: 'low',
+        reason: `Off-default but listed for only ${price} coins — almost certainly a baseline/tier colour, not a real exotic`,
+        priority: 2,
+        drop: true,
+      };
+    }
     confidence = 'medium';
-    reason = `Off-default colour, not a Crystal/Fairy dye — likely OG/glitched exotic`;
+    reason = 'Off-default colour, not a Crystal/Fairy dye — likely OG/glitched exotic';
     priority = 50;
   }
 

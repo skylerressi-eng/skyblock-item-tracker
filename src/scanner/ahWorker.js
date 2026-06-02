@@ -4,7 +4,7 @@ import { getAuctionsPage } from '../clients/hypixel.js';
 import { decodeSingleItem } from '../items/nbt.js';
 import { normalizeNbtItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
-import { isRandomDyed, isAnimated } from '../items/data.js';
+import { isRandomDyed, isAnimated, isTieredColor } from '../items/data.js';
 import { makeCtx, toFinding } from './context.js';
 import { enqueueSeller } from './crawler.js';
 
@@ -44,8 +44,10 @@ export async function runCycle() {
       if (!it) continue;
       scanned++;
 
-      for (const fr of classifyItem(it, ctx)) {
-        if (fr.drop && config.dropRandomDyed) continue; // skip Satin/Oxford etc.
+      // Pass the listing price so the price-floor can reject dirt-cheap (fake)
+      // exotics, e.g. a "37-coin" baseline-colour piece.
+      for (const fr of classifyItem(it, { ...ctx, price: auc.starting_bid })) {
+        if (fr.drop && config.dropRandomDyed) continue; // skip Satin/Oxford/tier/cheap
         const f = toFinding(fr, it, {
           uuid: auc.auctioneer,
           username: null,
@@ -59,7 +61,8 @@ export async function runCycle() {
       // Never learn colours from random-dyed sets — their colour is a random
       // roll and would poison the learned default for that piece.
       if (it.hex && !(it.extra && it.extra.dye_item)
-          && !isRandomDyed(it.itemId) && !isAnimated(it.itemId, it.hex)) {
+          && !isRandomDyed(it.itemId) && !isAnimated(it.itemId, it.hex)
+          && !isTieredColor(it.itemId)) {
         ctx.recordPieceColor(it.itemId, it.hex);
       }
       if (auc.auctioneer) {
