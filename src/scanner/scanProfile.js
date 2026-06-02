@@ -95,15 +95,27 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
       ({ items, profilesScanned, lastSave } = profRes.value);
       mode = 'hypixel';
     } else {
-      // Key present but failed (bad key, throttled, private) — degrade.
-      warning = `hypixel failed (${profRes.reason.message}); used skycrypt`;
-      ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
-      mode = 'skycrypt-fallback';
+      // Key path failed (bad key, throttled, private). Try SkyCrypt, but NEVER
+      // let a fallback failure hard-error the whole scan — record it and move on
+      // with whatever we have (usually nothing) so the crawler keeps going.
+      warning = `hypixel failed (${profRes.reason.message})`;
+      try {
+        ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
+        mode = 'skycrypt-fallback';
+      } catch (e2) {
+        warning += `; skycrypt failed (${e2.message})`;
+        mode = 'failed';
+      }
     }
     if (friendRes.status === 'fulfilled') friends = friendRes.value || [];
   } else {
-    ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
-    mode = 'skycrypt';
+    try {
+      ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
+      mode = 'skycrypt';
+    } catch (e) {
+      warning = `skycrypt failed (${e.message})`;
+      mode = 'failed';
+    }
   }
 
   // Inactivity signal: how long since this player last logged in. Dormant

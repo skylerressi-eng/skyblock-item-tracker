@@ -114,8 +114,28 @@ function renderEngineBar(s) {
     `<div class="engine-stat"><b>${fmt(q.done || 0)}</b>accounts crawled</div>`,
     `<div class="engine-stat"><b>${fmt(t.scanned || 0)}</b>scanned this run</div>`,
   ];
+  cards.push(`<div class="engine-stat"><b>${fmt(cr.scansPerMin || 0)}</b>scans / min</div>`);
   if (t.errors) cards.push(`<div class="engine-stat"><b>${fmt(t.errors)}</b>errors</div>`);
   $('#engine-bar').innerHTML = cards.join('');
+
+  // Show WHY scans are failing (top error kinds), so problems are diagnosable.
+  const kinds = Object.entries(cr.errorKinds || {}).sort((a, b) => b[1] - a[1]);
+  let diag = $('#engine-diag');
+  if (!diag) {
+    diag = document.createElement('div');
+    diag.id = 'engine-diag';
+    diag.className = 'engine-diag';
+    $('#engine-bar').after(diag);
+  }
+  if (kinds.length && (t.scanned || 0) === 0) {
+    diag.innerHTML = `<span class="warn-text">⚠ scans failing:</span> ` +
+      kinds.slice(0, 3).map(([k, n]) => `${esc(k)} <b>×${fmt(n)}</b>`).join(' · ');
+  } else if (kinds.length) {
+    diag.innerHTML = `<span class="muted">errors:</span> ` +
+      kinds.slice(0, 3).map(([k, n]) => `${esc(k)} ×${fmt(n)}`).join(' · ');
+  } else {
+    diag.innerHTML = '';
+  }
 }
 
 // ---------- scan ----------

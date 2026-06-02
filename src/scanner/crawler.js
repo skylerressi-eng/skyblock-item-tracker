@@ -10,8 +10,28 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 let timer = null;
 let running = false;
 const stats = { scanned: 0, findings: 0, enqueued: 0, errors: 0, lastError: null };
+const errorKinds = {}; // human label -> count, so we can SEE what's failing
 const startedAt = Date.now();
 const recentScans = []; // timestamps of recent scans, for a rolling rate
+
+// Bucket an error message into a diagnosable category.
+function classifyError(msg) {
+  const m = String(msg || '').toLowerCase();
+  if (m.includes('403')) return 'blocked (403 — key invalid/unauthorized or network policy)';
+  if (m.includes('429') || m.includes('throttle') || m.includes('rate')) return 'throttled (429)';
+  if (m.includes('invalid api key') || m.includes('no_key') || m.includes('api key')) return 'bad/missing API key';
+  if (m.includes('timed out') || m.includes('timeout') || m.includes('etimedout')) return 'timeout';
+  if (m.includes('not found') || m.includes('404')) return 'player/profile not found';
+  if (m.includes('enotfound') || m.includes('econnrefused') || m.includes('network') || m.includes('fetch failed')) return 'network unreachable';
+  if (m.includes('502') || m.includes('503') || m.includes('cause')) return 'Hypixel API error';
+  return 'other';
+}
+function noteError(msg) {
+  stats.errors++;
+  stats.lastError = msg;
+  const kind = classifyError(msg);
+  errorKinds[kind] = (errorKinds[kind] || 0) + 1;
+}
 
 function noteScan() {
   const now = Date.now();
@@ -27,6 +47,7 @@ export function getCrawlerStatus() {
     concurrency: config.crawler.concurrency,
     keys: config.hypixelApiKeys.length,
     scansPerMin: recentScans.length, // accounts scanned in the last 60s
+    errorKinds: { ...errorKinds }, // breakdown of WHY scans fail
     queue: repo.queueStats(),
     totals: { ...stats, uptimeSec: Math.round((Date.now() - startedAt) / 1000) },
     recent: repo.recentCrawl(8),
@@ -69,6 +90,14 @@ async function processOne(row, keyIndex = null) {
   const handle = row.uuid || row.username;
   try {
     const res = await scanProfile(handle, { source: row.source || 'crawl', keyIndex });
+    // scanProfile no longer throws on API failure — it returns mode 'failed'
+    // with a warning. Treat that as an error so it's counted, diagnosed, and
+    // retried, rather than silently marked done.
+    if (res.mode === 'failed') {
+      noteError(res.warning || 'scan failed');
+      repo.finishCrawl(row.key, { status: 'error', message: res.warning || 'scan failed' });
+      return 0;
+    }
     stats.scanned++;
     noteScan();
     stats.findings += res.newFindings;
@@ -101,8 +130,7 @@ async function processOne(row, keyIndex = null) {
     if (res.dormant) stats.dormantFound = (stats.dormantFound || 0) + 1;
     return res.newFindings;
   } catch (err) {
-    stats.errors++;
-    stats.lastError = err.message;
+    noteError(err.message);
     repo.finishCrawl(row.key, { status: 'error', message: err.message });
     return 0;
   }
@@ -134,12 +162,32 @@ async function tick() {
     };
     await Promise.all(Array.from({ length: lanes }, (_, i) => worker(i)));
     if (found) console.log(`[crawl] batch of ${batch.length} (×${lanes} lanes) → ${found} new finding(s)`);
+    maybeHeartbeat();
   } catch (e) {
-    stats.errors++;
-    stats.lastError = e.message;
+    noteError(e.message);
     console.error('[crawl] tick error:', e.message);
   } finally {
     running = false;
+  }
+}
+
+// Every ~30s, print a one-line health summary so silent failures are visible.
+let lastHeartbeat = 0;
+function maybeHeartbeat() {
+  const now = Date.now();
+  if (now - lastHeartbeat < 30_000) return;
+  lastHeartbeat = now;
+  const q = repo.queueStats();
+  const topErr = Object.entries(errorKinds).sort((a, b) => b[1] - a[1])[0];
+  const errPart = stats.errors
+    ? ` | errors ${stats.errors}` + (topErr ? ` (top: ${topErr[0]} ×${topErr[1]})` : '')
+    : '';
+  console.log(
+    `[crawl] heartbeat — scanned ${stats.scanned} (${recentScans.length}/min), ` +
+    `findings ${stats.findings}, queued ${q.queued}, scanning ${q.scanning}${errPart}`,
+  );
+  if (stats.errors && stats.scanned === 0 && stats.lastError) {
+    console.warn(`[crawl] ⚠ all scans failing — last error: ${stats.lastError}`);
   }
 }
 
