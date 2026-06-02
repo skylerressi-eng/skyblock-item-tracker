@@ -81,17 +81,26 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   let lastSave = 0;
   let mode;
   let warning = null;
+  let friends = [];
 
   if (config.hypixelApiKey) {
-    try {
-      ({ items, profilesScanned, lastSave } = await gatherFromHypixel(uuid, keyIndex));
+    // Fire profiles + friends concurrently — independent keyed calls, paced per
+    // key by the limiter, so overlapping them halves the per-account latency.
+    const wantFriends = withFriends;
+    const [profRes, friendRes] = await Promise.allSettled([
+      gatherFromHypixel(uuid, keyIndex),
+      wantFriends ? getFriendUuids(uuid, keyIndex) : Promise.resolve([]),
+    ]);
+    if (profRes.status === 'fulfilled') {
+      ({ items, profilesScanned, lastSave } = profRes.value);
       mode = 'hypixel';
-    } catch (err) {
+    } else {
       // Key present but failed (bad key, throttled, private) — degrade.
-      warning = `hypixel failed (${err.message}); used skycrypt`;
+      warning = `hypixel failed (${profRes.reason.message}); used skycrypt`;
       ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
       mode = 'skycrypt-fallback';
     }
+    if (friendRes.status === 'fulfilled') friends = friendRes.value || [];
   } else {
     ({ items, profilesScanned } = await gatherFromSkycrypt(username || uuid));
     mode = 'skycrypt';
@@ -127,12 +136,7 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   });
   let newFindings = 0;
   for (const f of findings) if (repo.insertFinding(f).isNew) newFindings++;
-
-  // Friend graph (key only). Failures here never fail the scan.
-  let friends = [];
-  if (withFriends && config.hypixelApiKey) {
-    try { friends = await getFriendUuids(uuid, keyIndex); } catch { /* ignore */ }
-  }
+  // (friends were fetched concurrently with the profile above)
 
   return {
     uuid, username, mode, warning,

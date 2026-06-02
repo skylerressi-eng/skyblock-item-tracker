@@ -31,6 +31,9 @@ export const config = {
   hypixelApiKeys: apiKeys,
   // Back-compat alias: truthy when any key is configured; first key as a string.
   hypixelApiKey: apiKeys[0] || null,
+  // Hypixel's per-key request limit (requests/minute). The client paces calls to
+  // run just under this on EACH key, so total throughput ≈ keys × this.
+  hypixelRatePerMin: Number(process.env.HYPIXEL_RATE_PER_MIN || 300),
 
   userAgent:
     process.env.USER_AGENT ||
@@ -82,12 +85,13 @@ export const config = {
   // and classifying its items. This is the engine behind "scan everyone".
   crawler: {
     enabled: bool(process.env.CRAWLER, true),
-    intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 8_000),
-    batchSize: Number(process.env.CRAWL_BATCH || 3),
-    // How many accounts to scan in PARALLEL per tick. Defaults to the number of
-    // API keys (each lane uses a different key / rate-limit budget), capped by
-    // batchSize. 1 = sequential.
-    concurrency: Number(process.env.CRAWL_CONCURRENCY || apiKeys.length || 1),
+    intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 1_000),
+    batchSize: Number(process.env.CRAWL_BATCH || 40),
+    // How many accounts to scan in PARALLEL per tick. A per-key rate limiter
+    // paces the actual requests, so we can run several lanes per key without
+    // overrunning the limit; this just bounds in-flight work. Defaults to
+    // 3 lanes per key.
+    concurrency: Number(process.env.CRAWL_CONCURRENCY || (apiKeys.length || 1) * 3),
     // Re-scan an account at most once per this window (avoid re-hammering).
     rescanAfterMs: Number(process.env.RESCAN_AFTER_MS || 6 * 60 * 60 * 1000),
     // Cap how many friends to enqueue per scanned account (graph fan-out).

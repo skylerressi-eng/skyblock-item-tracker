@@ -10,13 +10,25 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 let timer = null;
 let running = false;
 const stats = { scanned: 0, findings: 0, enqueued: 0, errors: 0, lastError: null };
+const startedAt = Date.now();
+const recentScans = []; // timestamps of recent scans, for a rolling rate
+
+function noteScan() {
+  const now = Date.now();
+  recentScans.push(now);
+  // keep only the last 60s
+  while (recentScans.length && now - recentScans[0] > 60_000) recentScans.shift();
+}
 
 export function getCrawlerStatus() {
   return {
     enabled: config.crawler.enabled,
     running,
+    concurrency: config.crawler.concurrency,
+    keys: config.hypixelApiKeys.length,
+    scansPerMin: recentScans.length, // accounts scanned in the last 60s
     queue: repo.queueStats(),
-    totals: { ...stats },
+    totals: { ...stats, uptimeSec: Math.round((Date.now() - startedAt) / 1000) },
     recent: repo.recentCrawl(8),
   };
 }
@@ -58,6 +70,7 @@ async function processOne(row, keyIndex = null) {
   try {
     const res = await scanProfile(handle, { source: row.source || 'crawl', keyIndex });
     stats.scanned++;
+    noteScan();
     stats.findings += res.newFindings;
 
     // Chain friends-of-friends (only populated when a Hypixel key is set).
