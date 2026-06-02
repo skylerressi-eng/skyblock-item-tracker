@@ -52,10 +52,11 @@ export function enqueueSeller(uuid) {
 }
 
 // Scan a single queued account, store findings, and chain its friends.
-async function processOne(row) {
+// `keyIndex` pins which rotated API key this lane uses (for parallel batches).
+async function processOne(row, keyIndex = null) {
   const handle = row.uuid || row.username;
   try {
-    const res = await scanProfile(handle, { source: row.source || 'crawl' });
+    const res = await scanProfile(handle, { source: row.source || 'crawl', keyIndex });
     stats.scanned++;
     stats.findings += res.newFindings;
 
@@ -100,10 +101,20 @@ async function tick() {
   try {
     const batch = repo.claimBatch(config.crawler.batchSize);
     if (!batch.length) return;
-    // Sequential within a batch keeps us gentle on the upstream APIs.
+    // Run up to `concurrency` accounts in parallel, each lane pinned to its own
+    // API key (independent rate-limit budget). A shared cursor hands the next
+    // queued row to whichever lane is free, so faster lanes aren't blocked.
+    const lanes = Math.max(1, Math.min(config.crawler.concurrency, batch.length));
+    let next = 0;
     let found = 0;
-    for (const row of batch) found += await processOne(row);
-    if (found) console.log(`[crawl] batch of ${batch.length} → ${found} new finding(s)`);
+    const worker = async (laneKeyIndex) => {
+      while (next < batch.length) {
+        const row = batch[next++];
+        found += await processOne(row, laneKeyIndex);
+      }
+    };
+    await Promise.all(Array.from({ length: lanes }, (_, i) => worker(i)));
+    if (found) console.log(`[crawl] batch of ${batch.length} (×${lanes} lanes) → ${found} new finding(s)`);
   } catch (e) {
     stats.errors++;
     stats.lastError = e.message;
@@ -118,8 +129,9 @@ export function startCrawler() {
   if (config.crawler.seedOnStart) seedQueue();
   setTimeout(tick, 2000); // let the server bind + AH worker prime first
   timer = setInterval(tick, config.crawler.intervalMs);
+  const nKeys = config.hypixelApiKeys.length;
   console.log(
-    `[crawl] crawler enabled — batch ${config.crawler.batchSize} every ${config.crawler.intervalMs}ms` +
-      (config.hypixelApiKey ? ' (friend-chain ON)' : ' (keyless: AH-seller chain only)'),
+    `[crawl] crawler enabled — batch ${config.crawler.batchSize}, ${config.crawler.concurrency} lane(s) every ${config.crawler.intervalMs}ms` +
+      (nKeys ? ` (${nKeys} API key${nKeys > 1 ? 's' : ''}, friend-chain ON)` : ' (keyless: AH-seller chain only)'),
   );
 }

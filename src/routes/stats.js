@@ -16,6 +16,8 @@ statsRouter.get('/', (req, res) => {
     crawler: getCrawlerStatus(),
     capabilities: {
       hypixelKey: Boolean(config.hypixelApiKey),
+      hypixelKeyCount: config.hypixelApiKeys.length,
+      crawlConcurrency: config.crawler.concurrency,
       rareTiers: config.rareTiers,
     },
   });

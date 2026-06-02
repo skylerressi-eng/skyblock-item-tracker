@@ -27,8 +27,8 @@ function findInventoryBlobs(node, locHint = 'inventory', out = []) {
 
 // Gather + normalize items from Hypixel profiles (full inventories). Throws if
 // no key or the API errors, so the caller can fall back to SkyCrypt.
-async function gatherFromHypixel(uuid) {
-  const profiles = await getProfiles(uuid);
+async function gatherFromHypixel(uuid, keyIndex = null) {
+  const profiles = await getProfiles(uuid, keyIndex);
   const items = [];
   let profilesScanned = 0;
   let lastSave = 0; // most-recent login across this player's profiles (ms epoch)
@@ -72,7 +72,7 @@ async function gatherFromSkycrypt(handle) {
 // any failure (or when no key is set). With a key it also returns the player's
 // friend UUIDs so the crawler can chain the social graph.
 //   opts.withFriends — fetch friends (key only); default true.
-export async function scanProfile(input, { source = 'manual', withFriends = true } = {}) {
+export async function scanProfile(input, { source = 'manual', withFriends = true, keyIndex = null } = {}) {
   const { uuid, username } = await resolvePlayer(input);
   const ctx = makeCtx();
 
@@ -84,7 +84,7 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
 
   if (config.hypixelApiKey) {
     try {
-      ({ items, profilesScanned, lastSave } = await gatherFromHypixel(uuid));
+      ({ items, profilesScanned, lastSave } = await gatherFromHypixel(uuid, keyIndex));
       mode = 'hypixel';
     } catch (err) {
       // Key present but failed (bad key, throttled, private) — degrade.
@@ -131,7 +131,7 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   // Friend graph (key only). Failures here never fail the scan.
   let friends = [];
   if (withFriends && config.hypixelApiKey) {
-    try { friends = await getFriendUuids(uuid); } catch { /* ignore */ }
+    try { friends = await getFriendUuids(uuid, keyIndex); } catch { /* ignore */ }
   }
 
   return {

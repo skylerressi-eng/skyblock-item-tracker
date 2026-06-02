@@ -8,15 +8,29 @@ const bool = (v, d = false) =>
   v == null ? d : ['1', 'true', 'yes', 'on'].includes(String(v).toLowerCase());
 const list = (v, d = []) =>
   v == null ? d : String(v).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+// Split a comma/space-separated secret list, preserving original case.
+const keyList = (v) =>
+  v == null ? [] : String(v).split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+
+// Accept either HYPIXEL_API_KEYS (plural, comma-separated) or the legacy
+// singular HYPIXEL_API_KEY. De-duplicated, order preserved.
+const apiKeys = [...new Set([
+  ...keyList(process.env.HYPIXEL_API_KEYS),
+  ...keyList(process.env.HYPIXEL_API_KEY),
+])];
 
 export const config = {
   port: Number(process.env.PORT || 3000),
   dbPath: process.env.DB_PATH || path.join(ROOT, 'data', 'tracker.db'),
 
-  // Optional Hypixel API key. With it we can read full player inventories via
-  // /v2/skyblock/profiles (the authoritative item source). Without it we fall
-  // back to the public SkyCrypt API, which exposes fewer items.
-  hypixelApiKey: process.env.HYPIXEL_API_KEY || null,
+  // Hypixel API keys. With at least one we read full player inventories via
+  // /v2/skyblock/profiles (the authoritative item source). Multiple keys are
+  // rotated round-robin and run concurrently — each has its own rate limit, so
+  // N keys ≈ N× the safe per-account throughput. Without any key we fall back
+  // to the public SkyCrypt API (fewer items).
+  hypixelApiKeys: apiKeys,
+  // Back-compat alias: truthy when any key is configured; first key as a string.
+  hypixelApiKey: apiKeys[0] || null,
 
   userAgent:
     process.env.USER_AGENT ||
@@ -70,6 +84,10 @@ export const config = {
     enabled: bool(process.env.CRAWLER, true),
     intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 8_000),
     batchSize: Number(process.env.CRAWL_BATCH || 3),
+    // How many accounts to scan in PARALLEL per tick. Defaults to the number of
+    // API keys (each lane uses a different key / rate-limit budget), capped by
+    // batchSize. 1 = sequential.
+    concurrency: Number(process.env.CRAWL_CONCURRENCY || apiKeys.length || 1),
     // Re-scan an account at most once per this window (avoid re-hammering).
     rescanAfterMs: Number(process.env.RESCAN_AFTER_MS || 6 * 60 * 60 * 1000),
     // Cap how many friends to enqueue per scanned account (graph fan-out).

@@ -63,8 +63,10 @@ app.use((err, req, res, _next) => {
 
 app.listen(config.port, () => {
   console.log(`skyblock-item-tracker listening on http://localhost:${config.port}`);
-  if (config.hypixelApiKey) {
-    console.log('[info] Hypixel API key detected — full inventory scans + friend-chain crawl enabled.');
+  const nKeys = config.hypixelApiKeys.length;
+  if (nKeys) {
+    console.log(`[info] ${nKeys} Hypixel API key${nKeys > 1 ? 's' : ''} detected — full inventory scans + friend-chain crawl` +
+      (nKeys > 1 ? ` (rotating, ${config.crawler.concurrency} parallel lanes).` : '.'));
   } else {
     console.log('[info] No HYPIXEL_API_KEY — using SkyCrypt fallback (fewer items) + AH-seller crawl.');
   }
