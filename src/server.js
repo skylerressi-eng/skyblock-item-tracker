@@ -19,6 +19,11 @@ import { startCrawler } from './scanner/crawler.js';
 
 getDb(); // initialize schema before serving
 
+// Recover any rows left mid-scan by a previous crash/restart so the crawler
+// never starts up with permanently-stranded 'scanning' work.
+const recovered = repo.requeueScanning();
+if (recovered) console.log(`[crawl] recovered ${recovered} stranded scanning row(s) from a prior run`);
+
 // One-time cleanup of pre-classified false positives:
 //  - random-dyed sets (Satin/Oxford/Velvet/Cashmere)
 //  - tiered/biome-coloured sets (Frozen Blaze, Crimson Isle/Kuudra, …)

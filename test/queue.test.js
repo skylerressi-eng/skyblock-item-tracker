@@ -56,14 +56,38 @@ test('queue: finishCrawl records identity and marks done', () => {
   assert.equal(hit.status, 'done');
 });
 
-test('queue: queuedCount counts queued + scanning only', () => {
+test('queue: queuedCount counts only pending (queued) rows', () => {
   assert.equal(repo.queuedCount(), 0);
   repo.enqueue({ uuid: 'COUNTME', priority: 9 });
   assert.equal(repo.queuedCount(), 1);
-  const [row] = repo.claimBatch(1); // now 'scanning' — still counts
-  assert.equal(repo.queuedCount(), 1);
-  repo.finishCrawl(row.key, { status: 'done' }); // 'done' — no longer counts
+  // Claimed (scanning) rows are NO LONGER counted — they're in-flight, not a
+  // backlog, so they must not block the AH worker's enqueue cap.
+  const [row] = repo.claimBatch(1);
   assert.equal(repo.queuedCount(), 0);
+  repo.finishCrawl(row.key, { status: 'done' });
+  assert.equal(repo.queuedCount(), 0);
+});
+
+test('queue: stranded scanning rows are recovered', () => {
+  repo.enqueue({ uuid: 'STRANDED', priority: 1 });
+  repo.claimBatch(1); // -> scanning
+  assert.equal(repo.queueStats().scanning >= 1, true);
+  const recovered = repo.requeueScanning();
+  assert.ok(recovered >= 1);
+  assert.equal(repo.queueStats().scanning, 0);
+  assert.ok(repo.queuedCount() >= 1, 'recovered row is queued again');
+});
+
+test('queue: idle recovery re-queues oldest done accounts', () => {
+  // Enqueue a known account, claim it, finish it as done, then confirm idle
+  // recovery can wake it back to 'queued'.
+  repo.enqueue({ uuid: 'IDLEWAKE', priority: 1 });
+  repo.claimBatch(100); // moves it (and any others) to scanning
+  repo.finishCrawl('idlewake', { status: 'done', uuid: 'IDLEWAKE' });
+  const beforeQueued = repo.queuedCount();
+  const woke = repo.requeueOldestDone(100);
+  assert.ok(woke >= 1, 'should re-queue at least one done account');
+  assert.ok(repo.queuedCount() > beforeQueued, 'a done row became queued again');
 });
 
 test('findings: since filter returns only newer rows', () => {

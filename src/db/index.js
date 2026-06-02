@@ -513,21 +513,60 @@ export const repo = {
   },
 
   // Atomically claim a batch of queued accounts (mark them in-progress so
-  // concurrent ticks don't double-scan). Returns the claimed rows.
-  claimBatch(limit = 3) {
+  // concurrent ticks don't double-scan). Also reclaims rows that have been stuck
+  // in 'scanning' longer than staleMs (e.g. from a crash/restart mid-scan) so
+  // the crawler can never permanently strand work. Returns the claimed rows.
+  claimBatch(limit = 3, staleMs = 5 * 60 * 1000) {
     const d = getDb();
     const claim = d.transaction((n) => {
+      const nowT = Date.now();
+      // Recover stale 'scanning' rows back to 'queued' first.
+      d.prepare(
+        `UPDATE crawl_queue SET status = 'queued'
+         WHERE status = 'scanning' AND COALESCE(scanned_at, enqueued_at, 0) < ?`,
+      ).run(nowT - staleMs);
+      // Retry transient errors: re-queue errored rows that are old enough and
+      // haven't exhausted their attempts (so a blip doesn't kill a target).
+      d.prepare(
+        `UPDATE crawl_queue SET status = 'queued'
+         WHERE status = 'error' AND attempts < ? AND COALESCE(scanned_at, 0) < ?`,
+      ).run(config.crawler.maxAttempts, nowT - config.crawler.errorRetryMs);
       const rows = d
         .prepare(
           `SELECT * FROM crawl_queue WHERE status = 'queued'
            ORDER BY priority ASC, enqueued_at ASC LIMIT ?`,
         )
         .all(n);
-      const mark = d.prepare(`UPDATE crawl_queue SET status = 'scanning' WHERE key = ?`);
-      for (const r of rows) mark.run(r.key);
+      // Stamp scanned_at on claim so a stuck claim ages out via staleMs above.
+      const mark = d.prepare(`UPDATE crawl_queue SET status = 'scanning', scanned_at = ? WHERE key = ?`);
+      const t = Date.now();
+      for (const r of rows) mark.run(t, r.key);
       return rows;
     });
     return claim(limit);
+  },
+
+  // Reset ALL stranded 'scanning' rows to 'queued'. Called once on startup so a
+  // crash mid-batch never leaves work permanently stuck.
+  requeueScanning() {
+    return getDb()
+      .prepare("UPDATE crawl_queue SET status = 'queued' WHERE status = 'scanning'")
+      .run().changes;
+  },
+
+  // Idle recovery: re-queue the N least-recently-scanned 'done' accounts so the
+  // crawler keeps refreshing known accounts instead of sitting idle when no new
+  // work is arriving. Returns how many were re-queued.
+  requeueOldestDone(limit = 40) {
+    return getDb()
+      .prepare(
+        `UPDATE crawl_queue SET status = 'queued'
+         WHERE key IN (
+           SELECT key FROM crawl_queue WHERE status = 'done'
+           ORDER BY COALESCE(scanned_at, 0) ASC LIMIT ?
+         )`,
+      )
+      .run(limit).changes;
   },
 
   finishCrawl(key, { uuid = null, username = null, status = 'done', message = null } = {}) {
@@ -548,9 +587,12 @@ export const repo = {
     return out;
   },
 
+  // Pending backlog = rows waiting to be scanned. Excludes 'scanning' so a
+  // burst of in-flight work (or stranded rows) can't make the AH worker think
+  // the queue is full and stop enqueuing new sellers.
   queuedCount() {
     return getDb()
-      .prepare("SELECT COUNT(*) c FROM crawl_queue WHERE status IN ('queued','scanning')")
+      .prepare("SELECT COUNT(*) c FROM crawl_queue WHERE status = 'queued'")
       .get().c;
   },
 

@@ -98,6 +98,10 @@ export const config = {
     maxFriendsPerAccount: Number(process.env.MAX_FRIENDS || 30),
     // Stop auto-enqueuing AH sellers once the queue backlog exceeds this.
     maxQueueBacklog: Number(process.env.MAX_QUEUE_BACKLOG || 5000),
+    // Retry an errored account up to this many attempts, waiting errorRetryMs
+    // between tries — so transient timeouts/429s don't permanently kill a target.
+    maxAttempts: Number(process.env.CRAWL_MAX_ATTEMPTS || 3),
+    errorRetryMs: Number(process.env.CRAWL_ERROR_RETRY_MS || 10 * 60 * 1000),
     // Bootstrap the queue from src/data/seeds.json on first run.
     seedOnStart: bool(process.env.SEED_ON_START, true),
     // An account that hasn't logged in for this many days is "dormant" —

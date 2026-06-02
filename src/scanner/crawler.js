@@ -112,8 +112,14 @@ async function tick() {
   if (running) return;
   running = true;
   try {
-    const batch = repo.claimBatch(config.crawler.batchSize);
-    if (!batch.length) return;
+    let batch = repo.claimBatch(config.crawler.batchSize);
+    if (!batch.length) {
+      // Queue is empty (AH worker off or starved). Re-activate the oldest-scanned
+      // accounts so the crawler can never sit permanently idle, then retry.
+      const woke = repo.requeueOldestDone(config.crawler.batchSize);
+      if (woke > 0) batch = repo.claimBatch(config.crawler.batchSize);
+      if (!batch.length) return;
+    }
     // Run up to `concurrency` accounts in parallel, each lane pinned to its own
     // API key (independent rate-limit budget). A shared cursor hands the next
     // queued row to whichever lane is free, so faster lanes aren't blocked.
