@@ -11,6 +11,7 @@ let timer = null;
 let running = false;
 let authFailures = 0;   // consecutive auth/key failures (circuit breaker)
 let pausedUntil = 0;    // crawler paused (ms epoch) after the breaker trips
+let dailyThrottled = false; // key hit its DAILY cap -> back off for hours
 const stats = { scanned: 0, findings: 0, enqueued: 0, errors: 0, lastError: null };
 const errorKinds = {}; // human label -> count, so we can SEE what's failing
 const startedAt = Date.now();
@@ -33,6 +34,12 @@ function isAuthFailure(msg) {
   const m = String(msg || '').toLowerCase();
   return m.includes('403') || m.includes('invalid api key') || m.includes('429')
     || m.includes('no_key') || m.includes('throttle');
+}
+// A DAILY throttle means the key's whole day budget is spent — pausing a couple
+// minutes is pointless, so we back off for hours instead.
+function isDailyThrottle(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.includes('daily') && (m.includes('throttle') || m.includes('limit'));
 }
 function noteError(msg) {
   stats.errors++;
@@ -110,7 +117,10 @@ async function processOne(row, keyIndex = null) {
       // breaker so the crawler pauses instead of hammering a dead key.
       if (isAuthFailure(w)) {
         repo.requeueOne(row.key);
-        authFailures++;
+        // A DAILY throttle is terminal for today — trip the breaker hard so we
+        // stop immediately and don't waste a fresh key's remaining budget.
+        authFailures += isDailyThrottle(w) ? config.crawler.authFailPause : 1;
+        if (isDailyThrottle(w)) dailyThrottled = true;
       } else {
         repo.finishCrawl(row.key, { status: 'error', message: w });
       }
@@ -162,11 +172,17 @@ async function tick() {
   // is preserved (auth failures requeue), so work resumes once the key is fixed.
   if (Date.now() < pausedUntil) return;
   if (authFailures >= config.crawler.authFailPause) {
-    pausedUntil = Date.now() + config.crawler.authPauseMs;
+    // Daily throttle -> back off for hours (its budget won't return for a
+    // while). Other auth failures -> the short pause.
+    const pauseMs = dailyThrottled ? config.crawler.dailyPauseMs : config.crawler.authPauseMs;
+    pausedUntil = Date.now() + pauseMs;
     authFailures = 0;
+    dailyThrottled = false;
+    const mins = Math.round(pauseMs / 60000);
     console.warn(
-      `[crawl] ⏸ pausing ${Math.round(config.crawler.authPauseMs / 1000)}s — API key keeps failing (403/invalid). ` +
-      'Check your key with `npm run diagnose`. Queue is preserved.',
+      `[crawl] ⏸ pausing ${mins} min — API key throttled/failing` +
+      (pauseMs >= 3600000 ? ' (DAILY cap reached — its budget resets later today).' : ' (403/invalid).') +
+      ' Queue is preserved; AH worker keeps running.',
     );
     return;
   }

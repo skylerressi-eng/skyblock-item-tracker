@@ -105,6 +105,9 @@ export const config = {
     // crawler for authPauseMs instead of hammering a dead/throttled key.
     authFailPause: Number(process.env.AUTH_FAIL_PAUSE || 8),
     authPauseMs: Number(process.env.AUTH_PAUSE_MS || 2 * 60 * 1000),
+    // A DAILY key throttle won't clear for hours — back off long instead of
+    // spamming retries that waste a fresh key's budget.
+    dailyPauseMs: Number(process.env.DAILY_PAUSE_MS || 6 * 60 * 60 * 1000),
     // Retry an errored account up to this many attempts, waiting errorRetryMs
     // between tries — so transient timeouts/429s don't permanently kill a target.
     maxAttempts: Number(process.env.CRAWL_MAX_ATTEMPTS || 3),
