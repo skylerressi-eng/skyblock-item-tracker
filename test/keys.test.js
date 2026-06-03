@@ -14,9 +14,8 @@ test('keys: HYPIXEL_API_KEYS parses into a deduped list', () => {
   assert.equal(config.hypixelApiKey, 'KEY_A', 'singular alias = first key');
 });
 
-test('keys: concurrency defaults to 3 lanes per key', () => {
-  // 3 keys × 3 lanes — the per-key rate limiter keeps this safe.
-  assert.equal(config.crawler.concurrency, 9);
+test('keys: concurrency defaults to 1 lane per key (gentle, anti-burnout)', () => {
+  assert.equal(config.crawler.concurrency, 3); // 3 keys × 1 lane
 });
 
 test('keys: pickKey() rotates round-robin', () => {

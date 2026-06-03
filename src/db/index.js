@@ -579,6 +579,15 @@ export const repo = {
       .run({ key, uuid, username, status, message, t: now() });
   },
 
+  // Put an account back to 'queued' WITHOUT counting an attempt — for failures
+  // that aren't the account's fault (e.g. a bad/throttled API key). This keeps
+  // the queue intact so it isn't burned down while the key is broken.
+  requeueOne(key) {
+    getDb()
+      .prepare("UPDATE crawl_queue SET status = 'queued' WHERE key = ?")
+      .run(key);
+  },
+
   queueStats() {
     const d = getDb();
     const rows = d.prepare('SELECT status, COUNT(*) c FROM crawl_queue GROUP BY status').all();

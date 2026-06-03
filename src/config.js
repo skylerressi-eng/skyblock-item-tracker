@@ -33,7 +33,10 @@ export const config = {
   hypixelApiKey: apiKeys[0] || null,
   // Hypixel's per-key request limit (requests/minute). The client paces calls to
   // run just under this on EACH key, so total throughput ≈ keys × this.
-  hypixelRatePerMin: Number(process.env.HYPIXEL_RATE_PER_MIN || 300),
+  // Hypixel's real per-key ceiling is ~300/min; we default to a gentler 120/min
+  // so we never push the key to the point of getting throttled (burnout). Raise
+  // HYPIXEL_RATE_PER_MIN toward 300 only if you want to run closer to the limit.
+  hypixelRatePerMin: Number(process.env.HYPIXEL_RATE_PER_MIN || 120),
 
   userAgent:
     process.env.USER_AGENT ||
@@ -85,19 +88,23 @@ export const config = {
   // and classifying its items. This is the engine behind "scan everyone".
   crawler: {
     enabled: bool(process.env.CRAWLER, true),
-    intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 1_000),
-    batchSize: Number(process.env.CRAWL_BATCH || 40),
-    // How many accounts to scan in PARALLEL per tick. A per-key rate limiter
-    // paces the actual requests, so we can run several lanes per key without
-    // overrunning the limit; this just bounds in-flight work. Defaults to
-    // 3 lanes per key.
-    concurrency: Number(process.env.CRAWL_CONCURRENCY || (apiKeys.length || 1) * 3),
+    intervalMs: Number(process.env.CRAWL_INTERVAL_MS || 2_000),
+    batchSize: Number(process.env.CRAWL_BATCH || 12),
+    // How many accounts to scan in PARALLEL per tick. Kept gentle by default
+    // (1 lane per key) to avoid burning out / getting the key throttled. A
+    // per-key rate limiter also paces the actual requests. Raise CRAWL_
+    // CONCURRENCY only if your key is comfortably under its limit.
+    concurrency: Number(process.env.CRAWL_CONCURRENCY || (apiKeys.length || 1)),
     // Re-scan an account at most once per this window (avoid re-hammering).
     rescanAfterMs: Number(process.env.RESCAN_AFTER_MS || 6 * 60 * 60 * 1000),
     // Cap how many friends to enqueue per scanned account (graph fan-out).
     maxFriendsPerAccount: Number(process.env.MAX_FRIENDS || 30),
     // Stop auto-enqueuing AH sellers once the queue backlog exceeds this.
     maxQueueBacklog: Number(process.env.MAX_QUEUE_BACKLOG || 5000),
+    // Circuit breaker: after this many consecutive auth/key failures, pause the
+    // crawler for authPauseMs instead of hammering a dead/throttled key.
+    authFailPause: Number(process.env.AUTH_FAIL_PAUSE || 8),
+    authPauseMs: Number(process.env.AUTH_PAUSE_MS || 2 * 60 * 1000),
     // Retry an errored account up to this many attempts, waiting errorRetryMs
     // between tries — so transient timeouts/429s don't permanently kill a target.
     maxAttempts: Number(process.env.CRAWL_MAX_ATTEMPTS || 3),

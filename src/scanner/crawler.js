@@ -9,6 +9,8 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 
 let timer = null;
 let running = false;
+let authFailures = 0;   // consecutive auth/key failures (circuit breaker)
+let pausedUntil = 0;    // crawler paused (ms epoch) after the breaker trips
 const stats = { scanned: 0, findings: 0, enqueued: 0, errors: 0, lastError: null };
 const errorKinds = {}; // human label -> count, so we can SEE what's failing
 const startedAt = Date.now();
@@ -25,6 +27,12 @@ function classifyError(msg) {
   if (m.includes('enotfound') || m.includes('econnrefused') || m.includes('network') || m.includes('fetch failed')) return 'network unreachable';
   if (m.includes('502') || m.includes('503') || m.includes('cause')) return 'Hypixel API error';
   return 'other';
+}
+// True for failures caused by the API key / auth, not the target account.
+function isAuthFailure(msg) {
+  const m = String(msg || '').toLowerCase();
+  return m.includes('403') || m.includes('invalid api key') || m.includes('429')
+    || m.includes('no_key') || m.includes('throttle');
 }
 function noteError(msg) {
   stats.errors++;
@@ -44,6 +52,7 @@ export function getCrawlerStatus() {
   return {
     enabled: config.crawler.enabled,
     running,
+    pausedUntil: pausedUntil > Date.now() ? pausedUntil : null,
     concurrency: config.crawler.concurrency,
     keys: config.hypixelApiKeys.length,
     scansPerMin: recentScans.length, // accounts scanned in the last 60s
@@ -94,10 +103,20 @@ async function processOne(row, keyIndex = null) {
     // with a warning. Treat that as an error so it's counted, diagnosed, and
     // retried, rather than silently marked done.
     if (res.mode === 'failed') {
-      noteError(res.warning || 'scan failed');
-      repo.finishCrawl(row.key, { status: 'error', message: res.warning || 'scan failed' });
+      const w = res.warning || 'scan failed';
+      noteError(w);
+      // If the failure is an AUTH problem (bad/throttled key, 403), it is NOT
+      // the account's fault — requeue it (don't burn the queue) and signal the
+      // breaker so the crawler pauses instead of hammering a dead key.
+      if (isAuthFailure(w)) {
+        repo.requeueOne(row.key);
+        authFailures++;
+      } else {
+        repo.finishCrawl(row.key, { status: 'error', message: w });
+      }
       return 0;
     }
+    authFailures = 0; // a success clears the breaker
     stats.scanned++;
     noteScan();
     stats.findings += res.newFindings;
@@ -131,12 +150,26 @@ async function processOne(row, keyIndex = null) {
     return res.newFindings;
   } catch (err) {
     noteError(err.message);
-    repo.finishCrawl(row.key, { status: 'error', message: err.message });
+    if (isAuthFailure(err.message)) { repo.requeueOne(row.key); authFailures++; }
+    else repo.finishCrawl(row.key, { status: 'error', message: err.message });
     return 0;
   }
 }
 
 async function tick() {
+  // Circuit breaker: if the API key keeps failing, PAUSE so we stop hammering
+  // a dead/throttled key (which only makes Hypixel block it harder). The queue
+  // is preserved (auth failures requeue), so work resumes once the key is fixed.
+  if (Date.now() < pausedUntil) return;
+  if (authFailures >= config.crawler.authFailPause) {
+    pausedUntil = Date.now() + config.crawler.authPauseMs;
+    authFailures = 0;
+    console.warn(
+      `[crawl] ⏸ pausing ${Math.round(config.crawler.authPauseMs / 1000)}s — API key keeps failing (403/invalid). ` +
+      'Check your key with `npm run diagnose`. Queue is preserved.',
+    );
+    return;
+  }
   if (running) return;
   running = true;
   try {
