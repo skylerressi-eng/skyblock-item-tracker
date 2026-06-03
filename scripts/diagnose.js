@@ -47,9 +47,18 @@ if (uuid) {
       if (res.ok && j && j.success) {
         line(`  ✅ SUCCESS — ${(j.profiles || []).length} profile(s) returned. This key works.`);
       } else {
-        line(`  ❌ FAILED — cause: ${(j && j.cause) || body.slice(0, 200)}`);
+        const cause = (j && j.cause) || body.slice(0, 200);
+        line(`  ❌ FAILED — cause: ${cause}`);
         if (res.status === 403) line('     → 403 usually means the KEY IS INVALID. Regenerate it at https://developer.hypixel.net');
-        if (res.status === 429) line('     → 429 means THROTTLED. Wait a few minutes; the app backs off automatically.');
+        if (res.status === 429 && /daily/i.test(cause)) {
+          line('     → DAILY cap reached. This limit is per Hypixel DEVELOPER ACCOUNT,');
+          line('       not per key — every key you own shares ONE daily pool, so adding/');
+          line('       swapping keys will not help. It resets on a ~24h cycle: wait for the');
+          line('       reset (try again in a few hours / tomorrow). Until then the AH worker');
+          line('       still finds rares (it needs no key).');
+        } else if (res.status === 429) {
+          line('     → Short-term throttle (per-minute). The app backs off automatically; retry soon.');
+        }
       }
     } catch (e) {
       line(`  ❌ Request error: ${e.message}`);
