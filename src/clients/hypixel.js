@@ -1,19 +1,45 @@
 import { config } from '../config.js';
 import { getJson } from './http.js';
 import { KeyRateLimiter } from './rateLimiter.js';
+import { canSpend, recordSpend, markDailyThrottled, budgetStatus } from '../scanner/budget.js';
 
 // Paces requests to ~hypixelRatePerMin PER KEY so we run at the ceiling without
 // 429s. Shared across all keyed calls.
 const limiter = new KeyRateLimiter(config.hypixelRatePerMin);
 
+const isDailyThrottle = (body) =>
+  /daily/i.test(String((body && (body.cause || body.error)) || ''));
+
 // Acquire a slot on `key`, fire the request, and on 429 back that key off and
-// retry (honouring Retry-After when present). Keeps us at max safe throughput.
+// retry (honouring Retry-After when present). Every keyed call is gated by the
+// daily budget guard so we never blow the account's daily request cap.
 async function keyedGet(url, key, { attempts = 3 } = {}) {
+  // Budget gate: refuse the request when the daily allowance is spent or paced
+  // out, so the caller degrades instead of burning the cap.
+  if (!canSpend()) {
+    const s = budgetStatus();
+    const err = new Error(
+      s.spent
+        ? `daily budget spent (${s.used}/${s.limit}); resets in ~${s.resetInHours}h`
+        : `budget paced (used ${s.used}/${s.limit}); pausing to spread across the day`,
+    );
+    err.status = 429;
+    err.budget = true;
+    throw err;
+  }
   for (let i = 0; ; i++) {
     await limiter.acquire(key);
     try {
-      return await getJson(url, { headers: { 'API-Key': key } });
+      const out = await getJson(url, { headers: { 'API-Key': key } });
+      recordSpend(1); // count a successful keyed request against today's budget
+      return out;
     } catch (err) {
+      // A DAILY throttle means the account's whole day is gone — mark it spent
+      // so we stop immediately and don't waste retries.
+      if (err.status === 429 && isDailyThrottle(err.body)) {
+        markDailyThrottled();
+        throw err;
+      }
       if (err.status === 429 && i < attempts - 1) {
         const retryMs = Number(err.body && err.body.retryAfter) * 1000 || 2000 * (i + 1);
         limiter.penalize(key, retryMs);

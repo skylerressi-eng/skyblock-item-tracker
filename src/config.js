@@ -38,6 +38,20 @@ export const config = {
   // HYPIXEL_RATE_PER_MIN toward 300 only if you want to run closer to the limit.
   hypixelRatePerMin: Number(process.env.HYPIXEL_RATE_PER_MIN || 120),
 
+  // Daily budget guard. Hypixel's key request cap is DAILY and shared across all
+  // keys on the account, so we spend it deliberately: persist usage across
+  // restarts and spread it evenly over the UTC day. dailyLimit is set a touch
+  // under the real ~300/day ceiling for safety headroom. headstart lets a little
+  // budget be available immediately at the start of the day.
+  budget: {
+    enabled: bool(process.env.BUDGET_GUARD, true),
+    dailyLimit: Number(process.env.DAILY_REQUEST_LIMIT || 250),
+    headstart: Number(process.env.BUDGET_HEADSTART || 0.05),
+    // Skip the (cost-doubling) friends lookup when fewer than this many paced
+    // requests remain, so the budget goes to profiles (the item source).
+    friendsMinRemaining: Number(process.env.BUDGET_FRIENDS_MIN || 20),
+  },
+
   userAgent:
     process.env.USER_AGENT ||
     'skyblock-item-tracker/0.1 (+https://github.com/skylerressi-eng/skyblock-item-tracker)',

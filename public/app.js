@@ -115,6 +115,13 @@ function renderEngineBar(s) {
     `<div class="engine-stat"><b>${fmt(t.scanned || 0)}</b>scanned this run</div>`,
   ];
   cards.push(`<div class="engine-stat"><b>${fmt(cr.scansPerMin || 0)}</b>scans / min</div>`);
+  // Daily key-request budget — the thing that was getting burned.
+  const b = cr.budget;
+  if (b && b.limit) {
+    const cls = b.spent ? '' : 'live';
+    const label = b.spent ? `spent · resets ~${b.resetInHours}h` : 'daily key budget';
+    cards.push(`<div class="engine-stat ${cls}"><b>${fmt(b.remaining)} / ${fmt(b.limit)}</b>${label}</div>`);
+  }
   if (t.errors) cards.push(`<div class="engine-stat"><b>${fmt(t.errors)}</b>errors</div>`);
   $('#engine-bar').innerHTML = cards.join('');
 

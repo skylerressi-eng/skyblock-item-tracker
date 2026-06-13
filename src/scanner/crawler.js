@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { repo } from '../db/index.js';
 import { scanProfile } from './scanProfile.js';
+import { budgetStatus } from './budget.js';
 
 const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 
@@ -64,6 +65,7 @@ export function getCrawlerStatus() {
     keys: config.hypixelApiKeys.length,
     scansPerMin: recentScans.length, // accounts scanned in the last 60s
     errorKinds: { ...errorKinds }, // breakdown of WHY scans fail
+    budget: budgetStatus(),       // daily key-request budget
     queue: repo.queueStats(),
     totals: { ...stats, uptimeSec: Math.round((Date.now() - startedAt) / 1000) },
     recent: repo.recentCrawl(8),

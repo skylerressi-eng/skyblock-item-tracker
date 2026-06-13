@@ -6,6 +6,7 @@ import { getProfile, collectItemsFromProfile } from '../clients/skycrypt.js';
 import { decodeInventory } from '../items/nbt.js';
 import { normalizeNbtItem, normalizeSkycryptItem } from '../items/extract.js';
 import { classifyItem } from '../items/classify.js';
+import { budgetStatus } from './budget.js';
 import { isRandomDyed, isAnimated, isTieredColor } from '../items/data.js';
 import { makeCtx, toFinding } from './context.js';
 
@@ -86,7 +87,12 @@ export async function scanProfile(input, { source = 'manual', withFriends = true
   if (config.hypixelApiKey) {
     // Fire profiles + friends concurrently — independent keyed calls, paced per
     // key by the limiter, so overlapping them halves the per-account latency.
-    const wantFriends = withFriends;
+    // Budget-saver: the friends call DOUBLES the request cost per account. When
+    // the daily allowance is running tight (paced remaining low), skip friends
+    // and spend the budget on profiles (the actual item source) instead.
+    const b = budgetStatus();
+    const friendsAffordable = !config.budget.enabled || b.pacedRemaining > config.budget.friendsMinRemaining;
+    const wantFriends = withFriends && friendsAffordable;
     const [profRes, friendRes] = await Promise.allSettled([
       gatherFromHypixel(uuid, keyIndex),
       wantFriends ? getFriendUuids(uuid, keyIndex) : Promise.resolve([]),
